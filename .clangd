@@ -1,0 +1,16 @@
+CompileFlags:
+  Add: [-xc++, -Wall, -std=c++17]
+  
+Index:
+  Background: Build
+  
+Diagnostics:
+  UnusedIncludes: None
+  
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+  
+Hover:
+  ShowAKA: Yes 
