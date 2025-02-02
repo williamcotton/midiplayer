@@ -118,6 +118,21 @@ void MainComponent::timerCallback()
         // Update position in beats
         auto newPosition = playbackPosition + deltaBeats;
         
+        // Find the last event timestamp in ticks
+        double lastEventTime = 0.0;
+        for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+        {
+            lastEventTime = std::max(lastEventTime, midiSequence.getEventPointer(i)->message.getTimeStamp());
+        }
+        double lastEventBeat = convertTicksToBeats(lastEventTime);
+        
+        // If we've reached the end of the sequence
+        if (newPosition >= lastEventBeat + 1.0 && !pianoRoll.isPositionInLoop(newPosition))
+        {
+            stopMidiFile();
+            return;
+        }
+        
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
             // Changed this condition to check against loop count directly
@@ -311,7 +326,16 @@ void MainComponent::playMidiFile()
 void MainComponent::stopMidiFile()
 {
     isPlaying = false;
+    // Turn off all notes with a proper release
     synth.allNotesOff(0, true);
+    // Also explicitly turn off all notes to be extra safe
+    for (int channel = 1; channel <= 16; ++channel)
+    {
+        for (int note = 0; note < 128; ++note)
+        {
+            synth.noteOff(channel, note, 0.0f, true);
+        }
+    }
     
     currentEvent = 0;
     playbackPosition = 0.0;

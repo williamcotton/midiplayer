@@ -39,40 +39,53 @@ public:
         notes.clear();
         DBG("PianoRoll: Setting new MIDI sequence with " + juce::String(sequence.getNumEvents()) + " events");
         
-        // Find the sequence length to determine number of beats
-        double sequenceLength = 0.0;
+        // First find the absolute last timestamp in the sequence
+        double lastTimestamp = 0.0;
         for (int i = 0; i < sequence.getNumEvents(); ++i)
         {
             auto timestamp = sequence.getEventPointer(i)->message.getTimeStamp();
-            sequenceLength = std::max(sequenceLength, timestamp);
+            lastTimestamp = std::max(lastTimestamp, timestamp);
         }
         
-        numBeats = static_cast<int>(std::ceil(sequenceLength / 480.0)) + 1; // Assuming standard MIDI PPQ of 480
-        DBG("PianoRoll: Sequence length is " + juce::String(sequenceLength) + " ticks, setting numBeats to " + juce::String(numBeats));
+        // Convert to beats and round up to the nearest bar
+        double sequenceLength = lastTimestamp / 480.0; // Convert to beats
+        double beatsPerBar = 4.0; // Assuming 4/4 time
+        numBeats = static_cast<int>(std::ceil(sequenceLength / beatsPerBar) * beatsPerBar) + 4;
         
+        DBG("PianoRoll: Last timestamp is " + juce::String(lastTimestamp) + " ticks, " + 
+            juce::String(sequenceLength) + " beats, setting numBeats to " + juce::String(numBeats));
+        
+        // Now process all notes
         for (int i = 0; i < sequence.getNumEvents(); ++i)
         {
             auto* event = sequence.getEventPointer(i);
             if (event->message.isNoteOn())
             {
+                Note note;
+                note.noteNumber = event->message.getNoteNumber();
+                note.startBeat = event->message.getTimeStamp() / 480.0;
+                note.velocity = event->message.getVelocity();
+                
                 auto noteOffEvent = event->noteOffObject;
                 if (noteOffEvent != nullptr)
                 {
-                    Note note;
-                    note.noteNumber = event->message.getNoteNumber();
-                    note.startBeat = event->message.getTimeStamp() / 480.0; // Convert ticks to beats
                     note.endBeat = noteOffEvent->message.getTimeStamp() / 480.0;
-                    note.velocity = event->message.getVelocity();
-                    notes.add(note);
-                    
-                    DBG("PianoRoll: Added note - Number: " + juce::String(note.noteNumber) + 
-                        " Start: " + juce::String(note.startBeat) + 
-                        " End: " + juce::String(note.endBeat));
                 }
+                else
+                {
+                    // If there's no note-off event, extend to the end of the sequence plus one beat
+                    note.endBeat = sequenceLength + 1.0;
+                    DBG("PianoRoll: Note " + juce::String(note.noteNumber) + 
+                        " has no note-off event, extending to " + juce::String(note.endBeat));
+                }
+                
+                notes.add(note);
+                DBG("PianoRoll: Added note - Number: " + juce::String(note.noteNumber) + 
+                    " Start: " + juce::String(note.startBeat) + 
+                    " End: " + juce::String(note.endBeat));
             }
         }
         
-        DBG("PianoRoll: Added " + juce::String(notes.size()) + " notes total");
         updateContentSize();
         repaint();
     }
