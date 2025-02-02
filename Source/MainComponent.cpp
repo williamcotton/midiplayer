@@ -2,14 +2,18 @@
 
 MainComponent::MainComponent()
 {
-    // Set up GUI
     addAndMakeVisible(loadButton);
     addAndMakeVisible(playButton);
     addAndMakeVisible(stopButton);
+    addAndMakeVisible(pianoRoll);
+    addAndMakeVisible(setLoopButton);
+    addAndMakeVisible(clearLoopButton);
     
     loadButton.setButtonText("Load MIDI File");
     playButton.setButtonText("Play");
     stopButton.setButtonText("Stop");
+    setLoopButton.setButtonText("Set Loop");
+    clearLoopButton.setButtonText("Clear Loop");
     
     playButton.setEnabled(false);
     stopButton.setEnabled(false);
@@ -17,11 +21,12 @@ MainComponent::MainComponent()
     loadButton.onClick = [this]() { loadMidiFile(); };
     playButton.onClick = [this]() { playMidiFile(); };
     stopButton.onClick = [this]() { stopMidiFile(); };
+    setLoopButton.onClick = [this]() { setupLoopRegion(); };
+    clearLoopButton.onClick = [this]() { clearLoopRegion(); };
     
-    setSize(400, 200);
+    setSize(800, 600);
     startTimer(50);
 
-    // Set up audio
     auto result = audioDeviceManager.initialiseWithDefaultDevices(2, 2);
     if (result.isNotEmpty())
     {
@@ -31,8 +36,7 @@ MainComponent::MainComponent()
     audioDeviceManager.addAudioCallback(&audioSourcePlayer);
     audioSourcePlayer.setSource(this);
 
-    // Set up synthesizer
-    for (int i = 0; i < 8; ++i)  // 8 voice polyphony
+    for (int i = 0; i < 8; ++i)
     {
         synth.addVoice(new SineWaveVoice());
     }
@@ -58,11 +62,16 @@ void MainComponent::resized()
     auto buttonHeight = 40;
     auto padding = 10;
     
-    loadButton.setBounds(area.removeFromTop(buttonHeight).reduced(padding));
-    area.removeFromTop(padding);
-    playButton.setBounds(area.removeFromTop(buttonHeight).reduced(padding));
-    area.removeFromTop(padding);
-    stopButton.setBounds(area.removeFromTop(buttonHeight).reduced(padding));
+    auto topControls = area.removeFromTop(buttonHeight);
+    loadButton.setBounds(topControls.removeFromLeft(120).reduced(padding, 0));
+    playButton.setBounds(topControls.removeFromLeft(80).reduced(padding, 0));
+    stopButton.setBounds(topControls.removeFromLeft(80).reduced(padding, 0));
+    
+    auto loopControls = area.removeFromTop(buttonHeight);
+    setLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(padding, 0));
+    clearLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(padding, 0));
+    
+    pianoRoll.setBounds(area.reduced(padding));
 }
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
@@ -79,7 +88,6 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
 void MainComponent::releaseResources()
 {
-    // This will be called when the audio device stops or when it is being restarted
 }
 
 void MainComponent::timerCallback()
@@ -89,11 +97,23 @@ void MainComponent::timerCallback()
         auto currentTime = juce::Time::getMillisecondCounterHiRes();
         auto deltaTime = currentTime - lastTime;
         
+        if (pianoRoll.isPositionInLoop(playbackPosition))
+        {
+            if (currentLoopIteration < pianoRoll.getLoopCount())
+            {
+                if (playbackPosition >= pianoRoll.getLoopEndBeat())
+                {
+                    playbackPosition = pianoRoll.getLoopStartBeat();
+                    currentEvent = findEventAtTime(playbackPosition);
+                    currentLoopIteration++;
+                }
+            }
+        }
+        
         while (currentEvent < midiSequence.getNumEvents() &&
                midiSequence.getEventPointer(currentEvent)->message.getTimeStamp() <= playbackPosition)
         {
             auto& midimsg = midiSequence.getEventPointer(currentEvent)->message;
-            DBG("Playing MIDI event: " + midimsg.getDescription());
             
             if (midimsg.isNoteOn())
             {
@@ -114,7 +134,6 @@ void MainComponent::timerCallback()
         
         if (currentEvent >= midiSequence.getNumEvents())
         {
-            DBG("Reached end of sequence");
             stopMidiFile();
         }
         
@@ -125,8 +144,6 @@ void MainComponent::timerCallback()
 
 void MainComponent::loadMidiFile()
 {
-    DBG("Starting loadMidiFile function");
-    
     auto fileChooserFlags =
         juce::FileBrowserComponent::openMode |
         juce::FileBrowserComponent::canSelectFiles;
@@ -136,28 +153,22 @@ void MainComponent::loadMidiFile()
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         "*.mid;*.midi");
         
-    DBG("Created FileChooser");
-
     chooser->launchAsync(fileChooserFlags,
         [this, chooser](const juce::FileChooser& fc)
         {
-            DBG("In FileChooser callback");
             auto result = fc.getResult();
             
             if (result.exists())
             {
-                DBG("Selected file: " + result.getFullPathName());
                 auto stream = std::make_unique<juce::FileInputStream>(result);
                 
                 if (stream->openedOk())
                 {
                     if (midiFile.readFrom(*stream))
                     {
-                        DBG("Successfully read MIDI file");
                         if (midiFile.getNumTracks() > 0)
                         {
                             midiSequence = *midiFile.getTrack(0);
-                            DBG("Got track 0, events: " + juce::String(midiSequence.getNumEvents()));
                             
                             for (int i = 1; i < midiFile.getNumTracks(); ++i)
                             {
@@ -167,41 +178,23 @@ void MainComponent::loadMidiFile()
                             }
                             
                             midiSequence.updateMatchedPairs();
+                            pianoRoll.setMidiSequence(midiSequence);
                             playButton.setEnabled(true);
                             stopButton.setEnabled(false);
                             currentEvent = 0;
                             playbackPosition = 0.0;
                         }
-                        else
-                        {
-                            DBG("No tracks in MIDI file");
-                        }
-                    }
-                    else
-                    {
-                        DBG("Failed to read MIDI file");
                     }
                 }
-                else
-                {
-                    DBG("Failed to create input stream");
-                }
-            }
-            else
-            {
-                DBG("No file selected or file doesn't exist");
             }
             delete chooser;
         });
-    
-    DBG("launchAsync called");
 }
 
 void MainComponent::playMidiFile()
 {
     if (currentEvent < midiSequence.getNumEvents())
     {
-        DBG("Starting playback");
         isPlaying = true;
         lastTime = juce::Time::getMillisecondCounterHiRes();
         playButton.setEnabled(false);
@@ -218,4 +211,51 @@ void MainComponent::stopMidiFile()
     playbackPosition = 0.0;
     playButton.setEnabled(true);
     stopButton.setEnabled(false);
-}
+}
+
+void MainComponent::setupLoopRegion()
+{
+    auto dialogWindow = std::make_unique<juce::AlertWindow>(
+        "Set Loop Region",
+        "Enter loop parameters (in beats)",
+        juce::AlertWindow::QuestionIcon);
+
+    dialogWindow->addTextEditor("startBeat", "0", "Start Beat:");
+    dialogWindow->addTextEditor("endBeat", "4", "End Beat:");
+    dialogWindow->addTextEditor("loopCount", "2", "Number of Loops:");
+    
+    dialogWindow->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    dialogWindow->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+    dialogWindow->enterModalState(true,
+        juce::ModalCallbackFunction::create(
+            [this, dialogWindow = std::move(dialogWindow)](int result) mutable
+            {
+                if (result == 1)  // "OK" was pressed
+                {
+                    double startBeat = dialogWindow->getTextEditorContents("startBeat").getDoubleValue();
+                    double endBeat = dialogWindow->getTextEditorContents("endBeat").getDoubleValue();
+                    int loops = dialogWindow->getTextEditorContents("loopCount").getIntValue();
+                    
+                    pianoRoll.setLoopRegion(startBeat, endBeat, loops);
+                    currentLoopIteration = 0;
+                }
+            }
+        ));
+    }
+
+void MainComponent::clearLoopRegion()
+{
+    pianoRoll.setLoopRegion(0, 0, 0);
+    currentLoopIteration = 0;
+}
+
+int MainComponent::findEventAtTime(double timeStamp)
+{
+    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+    {
+        if (midiSequence.getEventPointer(i)->message.getTimeStamp() >= timeStamp)
+            return i;
+    }
+    return midiSequence.getNumEvents();
+}
