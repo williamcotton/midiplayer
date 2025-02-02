@@ -24,6 +24,19 @@ MainComponent::MainComponent()
     setLoopButton.onClick = [this]() { setupLoopRegion(); };
     clearLoopButton.onClick = [this]() { clearLoopRegion(); };
     
+    // Setup tempo control
+    addAndMakeVisible(tempoSlider);
+    addAndMakeVisible(tempoLabel);
+    
+    tempoLabel.setText("Tempo (BPM)", juce::dontSendNotification);
+    tempoSlider.setRange(30.0, 300.0, 1.0);
+    tempoSlider.setValue(120.0, juce::dontSendNotification);
+    tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
+    tempoSlider.onValueChange = [this] { 
+        tempo = tempoSlider.getValue();
+        DBG("Tempo changed to: " + juce::String(tempo) + " BPM");
+    };
+    
     setSize(800, 600);
     startTimer(50);
 
@@ -70,6 +83,10 @@ void MainComponent::resized()
     auto loopControls = area.removeFromTop(buttonHeight);
     setLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(padding, 0));
     clearLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(padding, 0));
+    
+    auto tempoControls = loopControls.removeFromLeft(250);
+    tempoLabel.setBounds(tempoControls.removeFromLeft(100).reduced(padding, 0));
+    tempoSlider.setBounds(tempoControls.reduced(padding, 0));
     
     pianoRoll.setBounds(area.reduced(padding));
 }

@@ -142,6 +142,9 @@ private:
     double playbackPosition = 0.0;
     double lastTime = 0.0;
     int currentLoopIteration = 0;
+    double tempo = 120.0; // BPM
+    juce::Slider tempoSlider;
+    juce::Label tempoLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

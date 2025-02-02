@@ -2,7 +2,7 @@
 #include <JuceHeader.h>
 
 class PianoRollComponent : public juce::Component,
-                          public juce::ChangeListener
+                          public juce::Timer
 {
 public:
     PianoRollComponent()
@@ -95,7 +95,29 @@ public:
     double getLoopStartBeat() const { return loopStartBeat; }
     double getLoopEndBeat() const { return loopEndBeat; }
 
-    void changeListenerCallback(juce::ChangeBroadcaster*) override {}
+    void setPlaybackPosition(double beatPosition)
+    {
+        currentBeatPosition = beatPosition;
+        contentComponent.repaint();
+    }
+
+    void startPlayback()
+    {
+        startTimerHz(30); // Update 30 times per second
+    }
+
+    void stopPlayback()
+    {
+        stopTimer();
+        currentBeatPosition = 0.0;
+        contentComponent.repaint();
+    }
+
+    void timerCallback() override
+    {
+        // Just trigger a repaint to update the position line
+        contentComponent.repaint();
+    }
 
 private:
     struct Note
@@ -160,6 +182,11 @@ private:
                 g.fillRect(x + keyWidth, y, w, static_cast<float>(owner.pixelsPerNote));
             }
 
+            // Draw playback position line
+            float playbackX = static_cast<float>(owner.currentBeatPosition * owner.pixelsPerBeat) + keyWidth;
+            g.setColour(juce::Colours::white);
+            g.drawVerticalLine(static_cast<int>(playbackX), 0.0f, static_cast<float>(height));
+
             if (owner.isLooping)
             {
                 g.setColour(juce::Colours::yellow.withAlpha(0.3f));
@@ -192,6 +219,7 @@ private:
     double loopEndBeat;
     int loopCount;
     bool isLooping;
+    double currentBeatPosition = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollComponent)
 };
