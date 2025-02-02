@@ -121,7 +121,8 @@ void MainComponent::timerCallback()
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
             // Changed this condition to check against loop count directly
-            if (currentLoopIteration < pianoRoll.getLoopCount())
+            // Talk to client about what, eg, two loops should be - maybe they want ((currentLoopIteration) < pianoRoll.getLoopCount())
+            if ((currentLoopIteration + 1) < pianoRoll.getLoopCount())
             {
                 if (newPosition >= pianoRoll.getLoopEndBeat())
                 {
@@ -280,7 +281,7 @@ void MainComponent::playMidiFile()
         // make sure we process any notes that should be playing
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
-            double loopStartTicks = convertBeatsToTicks(playbackPosition);
+            double loopStartTicks  = convertBeatsToTicks(playbackPosition);
             
             // Find notes that should be playing at this position
             for (int i = 0; i < currentEvent; ++i)
