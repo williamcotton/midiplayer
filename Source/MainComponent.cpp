@@ -279,6 +279,38 @@ void MainComponent::playMidiFile()
         lastTime = juce::Time::getMillisecondCounterHiRes();
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
+        
+        // Reset loop iteration counter when starting playback
+        currentLoopIteration = 0;
+        
+        // If we're starting from a position within the loop region,
+        // make sure we process any notes that should be playing
+        if (pianoRoll.isPositionInLoop(playbackPosition))
+        {
+            double loopStartTicks = convertBeatsToTicks(playbackPosition);
+            
+            // Find notes that should be playing at this position
+            for (int i = 0; i < currentEvent; ++i)
+            {
+                auto* event = midiSequence.getEventPointer(i);
+                auto eventTime = convertTicksToBeats(event->message.getTimeStamp());
+                
+                if (event->message.isNoteOn())
+                {
+                    auto noteOff = event->noteOffObject;
+                    if (noteOff != nullptr)
+                    {
+                        auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
+                        if (eventTime <= playbackPosition && noteOffTime > playbackPosition)
+                        {
+                            synth.noteOn(event->message.getChannel(),
+                                       event->message.getNoteNumber(),
+                                       event->message.getVelocity() / 127.0f);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -289,6 +321,7 @@ void MainComponent::stopMidiFile()
     
     currentEvent = 0;
     playbackPosition = 0.0;
+    currentLoopIteration = 0;  // Reset loop iteration counter when stopping
     playButton.setEnabled(true);
     stopButton.setEnabled(false);
 }
@@ -327,7 +360,7 @@ void MainComponent::setupLoopRegion()
 void MainComponent::clearLoopRegion()
 {
     pianoRoll.setLoopRegion(0, 0, 0);
-    currentLoopIteration = 0;
+    currentLoopIteration = 0;  // Reset loop iteration counter when clearing loop
 }
 
 int MainComponent::findEventAtTime(double timeStamp)
