@@ -138,62 +138,81 @@ private:
 
         void paint(juce::Graphics& g) override
         {
-            auto width = getWidth();
-            auto height = getHeight();
-            DBG("PianoRoll ContentComponent: Painting with dimensions " + 
-                juce::String(width) + "x" + juce::String(height));
+    auto width = getWidth();
+    auto height = getHeight();
+    
+    // Constants
+    const float keyWidth = 40.0f;
+    
+    g.fillAll(juce::Colours::black);
 
-            g.fillAll(juce::Colours::black);
+    // Draw grid first
+    g.setColour(juce::Colours::darkgrey);
+    for (int beat = 0; beat <= owner.numBeats; ++beat)
+    {
+        float x = keyWidth + static_cast<float>(beat * owner.pixelsPerBeat);
+        g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
+    }
 
-            // Draw beat lines
-            g.setColour(juce::Colours::darkgrey);
-            for (int beat = 0; beat < owner.numBeats; ++beat)
-            {
-                float x = static_cast<float>(beat * owner.pixelsPerBeat);
-                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
-            }
+    // Draw loop region if active
+    if (owner.isLooping)
+    {
+        g.setColour(juce::Colours::yellow.withAlpha(0.3f));
+        float x1 = keyWidth + static_cast<float>(owner.loopStartBeat * owner.pixelsPerBeat);
+        float x2 = keyWidth + static_cast<float>(owner.loopEndBeat * owner.pixelsPerBeat);
+        g.fillRect(x1, 0.0f, x2 - x1, static_cast<float>(height));
+    }
 
-            // Draw piano keys
-            const float keyWidth = 40.0f;
-            for (int note = 0; note < 128; ++note)
-            {
-                float y = height - (note + 1) * owner.pixelsPerNote;
-                bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
-                g.setColour(isBlackKey ? juce::Colours::darkgrey : juce::Colours::lightgrey);
-                g.fillRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
-            }
+    // Draw notes before piano keys to ensure they don't overlay
+    for (auto& note : owner.notes)
+    {
+        float x = keyWidth + static_cast<float>(note.startBeat * owner.pixelsPerBeat);
+        float w = static_cast<float>((note.endBeat - note.startBeat) * owner.pixelsPerBeat);
+        float y = height - (note.noteNumber + 1) * owner.pixelsPerNote;
+        
+        g.setColour(juce::Colour::fromHSV(
+            static_cast<float>(note.noteNumber) / 128.0f, 0.5f, 0.9f, 1.0f));
+        
+        g.fillRect(x, y, w, static_cast<float>(owner.pixelsPerNote));
+    }
 
-            // Draw notes
-            DBG("PianoRoll ContentComponent: Drawing " + juce::String(owner.notes.size()) + " notes");
-            for (auto& note : owner.notes)
-            {
-                float x = static_cast<float>(note.startBeat * owner.pixelsPerBeat);
-                float w = static_cast<float>((note.endBeat - note.startBeat) * owner.pixelsPerBeat);
-                float y = height - (note.noteNumber + 1) * owner.pixelsPerNote;
-                
-                g.setColour(juce::Colour::fromHSV(
-                    static_cast<float>(note.noteNumber) / 128.0f, 0.5f, 0.9f, 1.0f));
-                
-                DBG("PianoRoll ContentComponent: Drawing note at x=" + juce::String(x) + 
-                    " y=" + juce::String(y) + 
-                    " w=" + juce::String(w) + 
-                    " h=" + juce::String(owner.pixelsPerNote));
-                    
-                g.fillRect(x + keyWidth, y, w, static_cast<float>(owner.pixelsPerNote));
-            }
-
-            // Draw playback position line
-            float playbackX = static_cast<float>(owner.currentBeatPosition * owner.pixelsPerBeat) + keyWidth;
+    // Draw piano keys as an overlay on the left
+    g.saveState();  // Save the current state to create a clipping region
+    g.reduceClipRegion(0, 0, static_cast<int>(keyWidth), height);  // Only draw keys in this region
+    
+    for (int note = 0; note < 128; ++note)
+    {
+        float y = height - (note + 1) * owner.pixelsPerNote;
+        bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
+        
+        // Draw white keys first
+        if (!isBlackKey)
+        {
             g.setColour(juce::Colours::white);
-            g.drawVerticalLine(static_cast<int>(playbackX), 0.0f, static_cast<float>(height));
+            g.fillRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
+            g.setColour(juce::Colours::black);
+            g.drawRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
+        }
+    }
+    
+    // Draw black keys on top
+    for (int note = 0; note < 128; ++note)
+    {
+        float y = height - (note + 1) * owner.pixelsPerNote;
+        bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
+        
+        if (isBlackKey)
+        {
+            g.setColour(juce::Colours::black);
+            g.fillRect(0.0f, y, keyWidth * 0.6f, static_cast<float>(owner.pixelsPerNote));
+        }
+    }
+    g.restoreState();  // Restore the previous clipping region
 
-            if (owner.isLooping)
-            {
-                g.setColour(juce::Colours::yellow.withAlpha(0.3f));
-                float x1 = static_cast<float>(owner.loopStartBeat * owner.pixelsPerBeat);
-                float x2 = static_cast<float>(owner.loopEndBeat * owner.pixelsPerBeat);
-                g.fillRect(x1, 0.0f, x2 - x1, static_cast<float>(getHeight()));
-            }
+    // Draw playback position line
+    float playbackX = keyWidth + static_cast<float>(owner.currentBeatPosition * owner.pixelsPerBeat);
+    g.setColour(juce::Colours::white);
+    g.drawVerticalLine(static_cast<int>(playbackX), 0.0f, static_cast<float>(height));
         }
 
     private:
