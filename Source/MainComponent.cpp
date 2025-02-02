@@ -120,7 +120,9 @@ void MainComponent::timerCallback()
         
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
-            if (currentLoopIteration < pianoRoll.getLoopCount())
+            // Change the comparison to use < instead of <=
+            // This ensures we only loop the requested number of times
+            if (currentLoopIteration < pianoRoll.getLoopCount() - 1)  // Subtract 1 because currentLoopIteration starts at 0
             {
                 if (newPosition >= pianoRoll.getLoopEndBeat())
                 {
@@ -130,7 +132,6 @@ void MainComponent::timerCallback()
                     newPosition = pianoRoll.getLoopStartBeat();
                     
                     // Scan backwards to find the last event before loop start
-                    // This ensures we catch any notes that should be playing at loop start
                     int newEvent = 0;
                     double loopStartTicks = convertBeatsToTicks(newPosition);
                     
@@ -152,12 +153,9 @@ void MainComponent::timerCallback()
                         auto* event = midiSequence.getEventPointer(i);
                         auto eventTime = convertTicksToBeats(event->message.getTimeStamp());
                         
-                        // If we've gone past our new position, stop scanning
                         if (eventTime > newPosition)
                             break;
                             
-                        // If this is a note that started before our loop point and has a note-off
-                        // after our loop point, trigger it
                         if (event->message.isNoteOn())
                         {
                             auto noteOff = event->noteOffObject;
@@ -177,6 +175,12 @@ void MainComponent::timerCallback()
                     currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
                     currentLoopIteration++;
                 }
+            }
+            // Add this to continue past the loop point after all iterations are done
+            else if (newPosition >= pianoRoll.getLoopEndBeat())
+            {
+                // Continue playing past the loop
+                currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
             }
         }
         
