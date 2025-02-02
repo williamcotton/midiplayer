@@ -124,12 +124,58 @@ void MainComponent::timerCallback()
             {
                 if (newPosition >= pianoRoll.getLoopEndBeat())
                 {
+                    // Turn off all currently playing notes before loop
+                    synth.allNotesOff(0, true);
+                    
                     newPosition = pianoRoll.getLoopStartBeat();
+                    
+                    // Scan backwards to find the last event before loop start
+                    // This ensures we catch any notes that should be playing at loop start
+                    int newEvent = 0;
+                    double loopStartTicks = convertBeatsToTicks(newPosition);
+                    
+                    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+                    {
+                        if (midiSequence.getEventPointer(i)->message.getTimeStamp() <= loopStartTicks)
+                        {
+                            newEvent = i;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    
+                    // Now scan forward from this point to find any notes that should be playing
+                    for (int i = newEvent; i < midiSequence.getNumEvents(); ++i)
+                    {
+                        auto* event = midiSequence.getEventPointer(i);
+                        auto eventTime = convertTicksToBeats(event->message.getTimeStamp());
+                        
+                        // If we've gone past our new position, stop scanning
+                        if (eventTime > newPosition)
+                            break;
+                            
+                        // If this is a note that started before our loop point and has a note-off
+                        // after our loop point, trigger it
+                        if (event->message.isNoteOn())
+                        {
+                            auto noteOff = event->noteOffObject;
+                            if (noteOff != nullptr)
+                            {
+                                auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
+                                if (noteOffTime > newPosition)
+                                {
+                                    synth.noteOn(event->message.getChannel(),
+                                               event->message.getNoteNumber(),
+                                               event->message.getVelocity() / 127.0f);
+                                }
+                            }
+                        }
+                    }
+                    
                     currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
                     currentLoopIteration++;
-                    
-                    // All notes off when looping
-                    synth.allNotesOff(0, true);
                 }
             }
         }
