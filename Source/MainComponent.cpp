@@ -118,25 +118,9 @@ void MainComponent::timerCallback()
         // Update position in beats
         auto newPosition = playbackPosition + deltaBeats;
         
-        // Find the last event timestamp in ticks
-        double lastEventTime = 0.0;
-        for (int i = 0; i < midiSequence.getNumEvents(); ++i)
-        {
-            lastEventTime = std::max(lastEventTime, midiSequence.getEventPointer(i)->message.getTimeStamp());
-        }
-        double lastEventBeat = convertTicksToBeats(lastEventTime);
-        
-        // If we've reached the end of the sequence
-        if (newPosition >= lastEventBeat + 1.0 && !pianoRoll.isPositionInLoop(newPosition))
-        {
-            stopMidiFile();
-            return;
-        }
-        
+        // Check for looping first
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
-            // Changed this condition to check against loop count directly
-            // Talk to client about what, eg, two loops should be - maybe they want ((currentLoopIteration) < pianoRoll.getLoopCount())
             if ((currentLoopIteration + 1) < pianoRoll.getLoopCount())
             {
                 if (newPosition >= pianoRoll.getLoopEndBeat())
@@ -186,7 +170,24 @@ void MainComponent::timerCallback()
                     currentLoopIteration++;
                 }
             }
-            // Removed the else if clause here - we don't need special handling for after the loop
+        }
+        // Only check for sequence end if we're not looping
+        else
+        {
+            // Find the last event timestamp in ticks
+            double lastEventTime = 0.0;
+            for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+            {
+                lastEventTime = std::max(lastEventTime, midiSequence.getEventPointer(i)->message.getTimeStamp());
+            }
+            double lastEventBeat = convertTicksToBeats(lastEventTime);
+            
+            // If we've reached the end of the sequence and we're not looping
+            if (newPosition >= lastEventBeat + 1.0)
+            {
+                stopMidiFile();
+                return;
+            }
         }
         
         // Process MIDI events
