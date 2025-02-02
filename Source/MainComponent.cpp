@@ -120,9 +120,8 @@ void MainComponent::timerCallback()
         
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
-            // Change the comparison to use < instead of <=
-            // This ensures we only loop the requested number of times
-            if (currentLoopIteration < pianoRoll.getLoopCount() - 1)  // Subtract 1 because currentLoopIteration starts at 0
+            // Changed this condition to check against loop count directly
+            if (currentLoopIteration < pianoRoll.getLoopCount())
             {
                 if (newPosition >= pianoRoll.getLoopEndBeat())
                 {
@@ -130,39 +129,35 @@ void MainComponent::timerCallback()
                     synth.allNotesOff(0, true);
                     
                     newPosition = pianoRoll.getLoopStartBeat();
-                    
-                    // Scan backwards to find the last event before loop start
-                    int newEvent = 0;
                     double loopStartTicks = convertBeatsToTicks(newPosition);
                     
-                    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+                    // Find the first event that's at or after our loop start point
+                    currentEvent = 0;
+                    while (currentEvent < midiSequence.getNumEvents())
                     {
-                        if (midiSequence.getEventPointer(i)->message.getTimeStamp() <= loopStartTicks)
-                        {
-                            newEvent = i;
-                        }
-                        else
-                        {
+                        auto eventTime = midiSequence.getEventPointer(currentEvent)->message.getTimeStamp();
+                        if (eventTime >= loopStartTicks)
                             break;
-                        }
+                        currentEvent++;
                     }
                     
-                    // Now scan forward from this point to find any notes that should be playing
-                    for (int i = newEvent; i < midiSequence.getNumEvents(); ++i)
+                    // Step back one event to catch any notes that might start exactly at the loop point
+                    if (currentEvent > 0)
+                        currentEvent--;
+                        
+                    // Scan for notes that should be playing at loop start
+                    for (int i = 0; i < currentEvent; ++i)
                     {
                         auto* event = midiSequence.getEventPointer(i);
-                        auto eventTime = convertTicksToBeats(event->message.getTimeStamp());
-                        
-                        if (eventTime > newPosition)
-                            break;
-                            
                         if (event->message.isNoteOn())
                         {
                             auto noteOff = event->noteOffObject;
                             if (noteOff != nullptr)
                             {
+                                auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
                                 auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
-                                if (noteOffTime > newPosition)
+                                
+                                if (noteOnTime <= newPosition && noteOffTime > newPosition)
                                 {
                                     synth.noteOn(event->message.getChannel(),
                                                event->message.getNoteNumber(),
@@ -172,16 +167,10 @@ void MainComponent::timerCallback()
                         }
                     }
                     
-                    currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
                     currentLoopIteration++;
                 }
             }
-            // Add this to continue past the loop point after all iterations are done
-            else if (newPosition >= pianoRoll.getLoopEndBeat())
-            {
-                // Continue playing past the loop
-                currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
-            }
+            // Removed the else if clause here - we don't need special handling for after the loop
         }
         
         // Process MIDI events
