@@ -112,50 +112,66 @@ void MainComponent::timerCallback()
     if (isPlaying)
     {
         auto currentTime = juce::Time::getMillisecondCounterHiRes();
-        auto deltaTime = currentTime - lastTime;
+        auto deltaTimeMs = currentTime - lastTime;
+        auto deltaBeats = convertMillisecondsToBeats(deltaTimeMs);
+        
+        // Update position in beats
+        auto newPosition = playbackPosition + deltaBeats;
         
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
             if (currentLoopIteration < pianoRoll.getLoopCount())
             {
-                if (playbackPosition >= pianoRoll.getLoopEndBeat())
+                if (newPosition >= pianoRoll.getLoopEndBeat())
                 {
-                    playbackPosition = pianoRoll.getLoopStartBeat();
-                    currentEvent = findEventAtTime(playbackPosition);
+                    newPosition = pianoRoll.getLoopStartBeat();
+                    currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
                     currentLoopIteration++;
+                    
+                    // All notes off when looping
+                    synth.allNotesOff(0, true);
                 }
             }
         }
         
-        while (currentEvent < midiSequence.getNumEvents() &&
-               midiSequence.getEventPointer(currentEvent)->message.getTimeStamp() <= playbackPosition)
+        // Process MIDI events
+        while (currentEvent < midiSequence.getNumEvents())
         {
-            auto& midimsg = midiSequence.getEventPointer(currentEvent)->message;
-            
-            if (midimsg.isNoteOn())
+            auto eventTime = convertTicksToBeats(
+                midiSequence.getEventPointer(currentEvent)->message.getTimeStamp());
+                
+            if (eventTime <= newPosition)
             {
-                synth.noteOn(midimsg.getChannel(),
-                           midimsg.getNoteNumber(),
-                           midimsg.getVelocity() / 127.0f);
+                auto& midimsg = midiSequence.getEventPointer(currentEvent)->message;
+                
+                if (midimsg.isNoteOn())
+                {
+                    synth.noteOn(midimsg.getChannel(),
+                               midimsg.getNoteNumber(),
+                               midimsg.getVelocity() / 127.0f);
+                }
+                else if (midimsg.isNoteOff())
+                {
+                    synth.noteOff(midimsg.getChannel(),
+                                midimsg.getNoteNumber(),
+                                midimsg.getVelocity() / 127.0f,
+                                true);
+                }
+                
+                currentEvent++;
             }
-            else if (midimsg.isNoteOff())
+            else
             {
-                synth.noteOff(midimsg.getChannel(),
-                            midimsg.getNoteNumber(),
-                            midimsg.getVelocity() / 127.0f,
-                            true);
+                break;
             }
-            
-            currentEvent++;
         }
         
-        if (currentEvent >= midiSequence.getNumEvents())
-        {
-            stopMidiFile();
-        }
-        
-        playbackPosition += deltaTime;
+        // Update position for next callback
+        playbackPosition = newPosition;
         lastTime = currentTime;
+        
+        // Update piano roll display
+        pianoRoll.setPlaybackPosition(playbackPosition);
     }
 }
 
@@ -199,7 +215,8 @@ void MainComponent::loadMidiFile()
                             playButton.setEnabled(true);
                             stopButton.setEnabled(false);
                             currentEvent = 0;
-                            playbackPosition = 0.0;
+                            playbackPosition = 0.0;  // Now in beats
+                            lastTime = juce::Time::getMillisecondCounterHiRes();
                         }
                     }
                 }

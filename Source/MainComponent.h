@@ -25,6 +25,27 @@ private:
     void setupLoopRegion();
     void clearLoopRegion();
     int findEventAtTime(double timeStamp);
+    double convertTicksToBeats(double ticks) const
+    {
+        return ticks / 480.0; // assuming standard MIDI PPQ
+    }
+    
+    double convertBeatsToTicks(double beats) const
+    {
+        return beats * 480.0;
+    }
+    
+    double convertMillisecondsToBeats(double ms) const
+    {
+        // Convert ms to beats based on tempo
+        return (ms / 1000.0) * (tempo / 60.0);
+    }
+    
+    double convertBeatsToMilliseconds(double beats) const
+    {
+        // Convert beats to ms based on tempo
+        return (beats * 60.0 / tempo) * 1000.0;
+    }
 
     // Audio setup
     juce::AudioDeviceManager audioDeviceManager;
