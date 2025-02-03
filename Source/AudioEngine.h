@@ -36,26 +36,26 @@ public:
         synth.allNotesOff(0, true);
     }
 
-    void noteOn(int channel, int noteNumber, float velocity)
+    void noteOn(int channel, int noteNumber, float velocity, double timeStamp = 0.0)
     {
         auto messageOn = juce::MidiMessage::noteOn(channel, noteNumber, velocity);
-        messageOn.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
+        messageOn.setTimeStamp(timeStamp);
         midiMessageCollector.addMessageToQueue(messageOn);
     }
 
-    void noteOff(int channel, int noteNumber, float velocity)
+    void noteOff(int channel, int noteNumber, float velocity, double timeStamp = 0.0)
     {
         auto messageOff = juce::MidiMessage::noteOff(channel, noteNumber, velocity);
-        messageOff.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
+        messageOff.setTimeStamp(timeStamp);
         midiMessageCollector.addMessageToQueue(messageOff);
     }
 
-    void allNotesOff()
+    void allNotesOff(double timeStamp = 0.0)
     {
         for (int channel = 1; channel <= 16; ++channel)
         {
             auto message = juce::MidiMessage::allNotesOff(channel);
-            message.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
+            message.setTimeStamp(timeStamp);
             midiMessageCollector.addMessageToQueue(message);
         }
     }

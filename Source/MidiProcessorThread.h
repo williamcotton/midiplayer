@@ -14,6 +14,7 @@ public:
     void setMidiSequence(const juce::MidiMessageSequence& sequence)
     {
         const juce::ScopedLock sl(lock);
+        stopPlayback(); // Ensure clean state
         midiSequence = sequence;
         currentEvent = 0;
         resetLoopState();
@@ -23,6 +24,11 @@ public:
     {
         const juce::ScopedLock sl(lock);
         tempo = newTempo;
+        // Recalculate timing to maintain position
+        if (isThreadRunning())
+        {
+            lastProcessTimeMs = juce::Time::getMillisecondCounterHiRes();
+        }
     }
 
     void setLoopRegion(double start, double end, int count)
@@ -31,8 +37,17 @@ public:
         loopStartBeat = start;
         loopEndBeat = end;
         loopCount = count;
-        originalLoopCount = count;  // Store the original count
+        originalLoopCount = count;
         currentLoopIteration = 0;
+        
+        // If we're currently playing and past the loop end, reset to loop start
+        if (isThreadRunning() && playbackPosition >= end)
+        {
+            playbackPosition = start;
+            currentEvent = findEventAtTime(convertBeatsToTicks(start));
+            lastProcessTimeMs = juce::Time::getMillisecondCounterHiRes();
+        }
+        
         DBG("Set loop region: start=" + juce::String(start) + 
             " end=" + juce::String(end) + 
             " count=" + juce::String(count));
@@ -48,9 +63,10 @@ public:
             currentEvent = 0;
             resetLoopState();
             
-            // Turn off any lingering notes
+            // Turn off any lingering notes with immediate timing
             audioEngine.allNotesOff();
             
+            // Initialize timing
             lastProcessTimeMs = juce::Time::getMillisecondCounterHiRes();
             startThread();
         }
@@ -66,24 +82,38 @@ public:
             currentEvent = findEventAtTime(convertBeatsToTicks(beatPosition));
             resetLoopState();
             
-            // Turn off any lingering notes
+            // Turn off any lingering notes with immediate timing
             audioEngine.allNotesOff();
             
+            // Initialize timing
             lastProcessTimeMs = juce::Time::getMillisecondCounterHiRes();
+            
+            // Scan for notes that should be playing at this position
+            scanAndTriggerActiveNotes(beatPosition);
+            
             startThread();
         }
     }
 
     void stopPlayback()
     {
+        // First signal the thread to stop
         signalThreadShouldExit();
-        stopThread(2000);
         
+        // Wait for the thread to finish with a timeout
+        if (!stopThread(2000))
+        {
+            // If thread didn't stop in time, force it
+            stopThread(-1);
+        }
+        
+        // Now safely update state
         const juce::ScopedLock sl(lock);
         audioEngine.allNotesOff();
         resetLoopState();
         currentEvent = 0;
         playbackPosition = 0.0;
+        lastProcessTimeMs = 0.0;
     }
 
     double getPlaybackPosition() const
@@ -95,19 +125,36 @@ public:
 private:
     void resetLoopState()
     {
+        // Already under lock from calling context
         currentLoopIteration = 0;
-        loopCount = originalLoopCount;  // Restore the original count
+        loopCount = originalLoopCount;
     }
 
-    void run() override
+    void scanAndTriggerActiveNotes(double position)
     {
-        while (!threadShouldExit())
+        // Already under lock from calling context
+        for (int i = 0; i < currentEvent; ++i)
         {
-            if (!processNextBlock())
+            auto* event = midiSequence.getEventPointer(i);
+            if (event->message.isNoteOn())
             {
-                signalThreadShouldExit();
+                auto noteOff = event->noteOffObject;
+                if (noteOff != nullptr)
+                {
+                    auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
+                    auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
+                    
+                    if (noteOnTime <= position && noteOffTime > position)
+                    {
+                        // Calculate precise timing for the audio thread
+                        double timeStamp = (position - noteOnTime) * (60.0 / tempo);
+                        audioEngine.noteOn(event->message.getChannel(),
+                                       event->message.getNoteNumber(),
+                                       event->message.getVelocity() / 127.0f,
+                                       timeStamp);
+                    }
+                }
             }
-            juce::Thread::sleep(1); // Small sleep to prevent CPU hogging
         }
     }
 
@@ -122,6 +169,9 @@ private:
         auto deltaTimeMs = currentTime - lastProcessTimeMs;
         auto deltaBeats = (deltaTimeMs / 1000.0) * (tempo / 60.0);
         
+        // Calculate the exact timestamp for the audio thread
+        double audioThreadTimeStamp = deltaTimeMs / 1000.0;
+        
         auto newPosition = playbackPosition + deltaBeats;
         
         // Handle looping
@@ -129,37 +179,22 @@ private:
         {
             if (currentLoopIteration < loopCount - 1)
             {
-                audioEngine.allNotesOff();
+                audioEngine.allNotesOff(audioThreadTimeStamp);
                 newPosition = loopStartBeat;
                 currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
                 currentLoopIteration++;
                 
-                // Scan for notes that should be playing at loop start
-                for (int i = 0; i < currentEvent; ++i)
-                {
-                    auto* event = midiSequence.getEventPointer(i);
-                    if (event->message.isNoteOn())
-                    {
-                        auto noteOff = event->noteOffObject;
-                        if (noteOff != nullptr)
-                        {
-                            auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
-                            auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
-                            
-                            if (noteOnTime <= newPosition && noteOffTime > newPosition)
-                            {
-                                audioEngine.noteOn(event->message.getChannel(),
-                                                event->message.getNoteNumber(),
-                                                event->message.getVelocity() / 127.0f);
-                            }
-                        }
-                    }
-                }
+                // Reset timing for accurate loop start
+                lastProcessTimeMs = currentTime;
+                audioThreadTimeStamp = 0.0;
+                
+                // Scan for notes at loop start with adjusted timing
+                scanAndTriggerActiveNotes(newPosition);
             }
             else
             {
                 // End of last loop iteration - continue playing from loop end
-                audioEngine.allNotesOff();
+                audioEngine.allNotesOff(audioThreadTimeStamp);
                 
                 // Set the position exactly at loop end
                 newPosition = loopEndBeat;
@@ -171,27 +206,12 @@ private:
                 if (currentEvent > 0)
                     currentEvent--;
                 
-                // Scan for any notes that should be playing at loop end
-                for (int i = 0; i < currentEvent; ++i)
-                {
-                    auto* event = midiSequence.getEventPointer(i);
-                    if (event->message.isNoteOn())
-                    {
-                        auto noteOff = event->noteOffObject;
-                        if (noteOff != nullptr)
-                        {
-                            auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
-                            auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
-                            
-                            if (noteOnTime <= newPosition && noteOffTime > newPosition)
-                            {
-                                audioEngine.noteOn(event->message.getChannel(),
-                                                event->message.getNoteNumber(),
-                                                event->message.getVelocity() / 127.0f);
-                            }
-                        }
-                    }
-                }
+                // Scan for notes at loop end with adjusted timing
+                scanAndTriggerActiveNotes(newPosition);
+                
+                // Reset timing for accurate continuation
+                lastProcessTimeMs = currentTime;
+                audioThreadTimeStamp = 0.0;
                 
                 // Disable looping
                 loopCount = 0;
@@ -207,10 +227,10 @@ private:
         }
         
         // Check if we've reached the end of the sequence (when not looping)
-        if (loopCount == 0 && newPosition >= lastEventTime + 1.0) // Add 1 beat buffer
+        if (loopCount == 0 && newPosition >= lastEventTime + 1.0)
         {
-            audioEngine.allNotesOff();
-            return false; // Stop the thread
+            audioEngine.allNotesOff(audioThreadTimeStamp);
+            return false;
         }
         
         // Process MIDI events
@@ -223,17 +243,23 @@ private:
             {
                 auto& midimsg = midiSequence.getEventPointer(currentEvent)->message;
                 
+                // Calculate precise timing for this event
+                double eventDeltaBeats = newPosition - eventTime;
+                double eventTimeStamp = audioThreadTimeStamp - (eventDeltaBeats * 60.0 / tempo);
+                
                 if (midimsg.isNoteOn())
                 {
                     audioEngine.noteOn(midimsg.getChannel(),
-                                    midimsg.getNoteNumber(),
-                                    midimsg.getVelocity() / 127.0f);
+                                   midimsg.getNoteNumber(),
+                                   midimsg.getVelocity() / 127.0f,
+                                   eventTimeStamp);
                 }
                 else if (midimsg.isNoteOff())
                 {
                     audioEngine.noteOff(midimsg.getChannel(),
-                                     midimsg.getNoteNumber(),
-                                     midimsg.getVelocity() / 127.0f);
+                                    midimsg.getNoteNumber(),
+                                    midimsg.getVelocity() / 127.0f,
+                                    eventTimeStamp);
                 }
                 
                 currentEvent++;
@@ -246,7 +272,7 @@ private:
         
         playbackPosition = newPosition;
         lastProcessTimeMs = currentTime;
-        return true; // Continue processing
+        return true;
     }
 
     int findEventAtTime(double timeStamp)
@@ -269,11 +295,23 @@ private:
         return beats * 480.0;
     }
 
+    void run() override
+    {
+        while (!threadShouldExit())
+        {
+            if (!processNextBlock())
+            {
+                signalThreadShouldExit();
+            }
+            juce::Thread::sleep(1); // Small sleep to prevent CPU hogging
+        }
+    }
+
     juce::CriticalSection lock;
     juce::MidiMessageSequence midiSequence;
     AudioEngine& audioEngine;
     
-    int originalLoopCount = 0; // Store the original loop count
+    int originalLoopCount = 0;
     int currentEvent = 0;
     double playbackPosition = 0.0;
     double lastProcessTimeMs = 0.0;
