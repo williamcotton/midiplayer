@@ -44,7 +44,7 @@ MainComponent::MainComponent()
     setSize(800, 600);
     startTimer(50);
 
-    auto result = audioDeviceManager.initialiseWithDefaultDevices(2, 2);
+    auto result = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
     if (result.isNotEmpty())
     {
         DBG("Error initializing audio: " + result);
