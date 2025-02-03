@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "PianoRollComponent.h"
+#include "MidiProcessorThread.h"
 
 class MainComponent : public juce::Component,
                      public juce::Timer,
@@ -83,6 +84,7 @@ private:
     juce::MidiFile midiFile;
     juce::MidiMessageSequence midiSequence;
     juce::Synthesiser synth;
+    std::unique_ptr<MidiProcessorThread> midiProcessor;
 
     // Synthesizer voice
     class SineWaveSound : public juce::SynthesiserSound
