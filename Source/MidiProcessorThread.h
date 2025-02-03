@@ -1,11 +1,13 @@
 #pragma once
 #include <JuceHeader.h>
+#include "AudioEngine.h"
 
 class MidiProcessorThread : public juce::Thread
 {
 public:
-    MidiProcessorThread()
-        : Thread("MidiProcessorThread", 9)
+    MidiProcessorThread(AudioEngine& audioEngineToUse)
+        : Thread("MidiProcessorThread", 9),
+          audioEngine(audioEngineToUse)
     {
     }
 
@@ -14,12 +16,6 @@ public:
         const juce::ScopedLock sl(lock);
         midiSequence = sequence;
         currentEvent = 0;
-    }
-
-    void setSynth(juce::Synthesiser* s)
-    {
-        const juce::ScopedLock sl(lock);
-        synth = s;
     }
 
     void setTempo(double newTempo)
@@ -40,7 +36,7 @@ public:
     void startPlayback()
     {
         const juce::ScopedLock sl(lock);
-        if (!isThreadRunning() && synth != nullptr)
+        if (!isThreadRunning())
         {
             // Reset all state
             playbackPosition = 0.0;
@@ -48,14 +44,7 @@ public:
             currentLoopIteration = 0;
             
             // Turn off any lingering notes
-            synth->allNotesOff(0, true);
-            for (int channel = 1; channel <= 16; ++channel)
-            {
-                for (int note = 0; note < 128; ++note)
-                {
-                    synth->noteOff(channel, note, 0.0f, true);
-                }
-            }
+            audioEngine.allNotesOff();
             
             lastProcessTimeMs = juce::Time::getMillisecondCounterHiRes();
             startThread();
@@ -65,7 +54,7 @@ public:
     void startPlaybackFromPosition(double beatPosition)
     {
         const juce::ScopedLock sl(lock);
-        if (!isThreadRunning() && synth != nullptr)
+        if (!isThreadRunning())
         {
             // Reset state
             playbackPosition = beatPosition;
@@ -73,14 +62,7 @@ public:
             currentLoopIteration = 0;
             
             // Turn off any lingering notes
-            synth->allNotesOff(0, true);
-            for (int channel = 1; channel <= 16; ++channel)
-            {
-                for (int note = 0; note < 128; ++note)
-                {
-                    synth->noteOff(channel, note, 0.0f, true);
-                }
-            }
+            audioEngine.allNotesOff();
             
             lastProcessTimeMs = juce::Time::getMillisecondCounterHiRes();
             startThread();
@@ -91,19 +73,7 @@ public:
     {
         signalThreadShouldExit();
         stopThread(2000);
-        
-        if (synth != nullptr)
-        {
-            const juce::ScopedLock sl(lock);
-            synth->allNotesOff(0, true);
-            for (int channel = 1; channel <= 16; ++channel)
-            {
-                for (int note = 0; note < 128; ++note)
-                {
-                    synth->noteOff(channel, note, 0.0f, true);
-                }
-            }
-        }
+        audioEngine.allNotesOff();
     }
 
     double getPlaybackPosition() const
@@ -129,7 +99,7 @@ private:
     {
         const juce::ScopedLock sl(lock);
         
-        if (synth == nullptr || midiSequence.getNumEvents() == 0)
+        if (midiSequence.getNumEvents() == 0)
             return false;
             
         auto currentTime = juce::Time::getMillisecondCounterHiRes();
@@ -143,7 +113,7 @@ private:
         {
             if (currentLoopIteration < loopCount - 1)
             {
-                synth->allNotesOff(0, true);
+                audioEngine.allNotesOff();
                 newPosition = loopStartBeat;
                 currentEvent = findEventAtTime(convertBeatsToTicks(newPosition));
                 currentLoopIteration++;
@@ -162,9 +132,9 @@ private:
                             
                             if (noteOnTime <= newPosition && noteOffTime > newPosition)
                             {
-                                synth->noteOn(event->message.getChannel(),
-                                           event->message.getNoteNumber(),
-                                           event->message.getVelocity() / 127.0f);
+                                audioEngine.noteOn(event->message.getChannel(),
+                                                event->message.getNoteNumber(),
+                                                event->message.getVelocity() / 127.0f);
                             }
                         }
                     }
@@ -173,7 +143,7 @@ private:
             else
             {
                 // End of last loop iteration - continue playing from loop end
-                synth->allNotesOff(0, true);
+                audioEngine.allNotesOff();
                 currentEvent = findEventAtTime(convertBeatsToTicks(loopEndBeat));
                 // Set loop count to 0 to prevent further looping
                 loopCount = 0;
@@ -191,7 +161,7 @@ private:
         // Check if we've reached the end of the sequence (when not looping)
         if (loopCount == 0 && newPosition >= lastEventTime + 1.0) // Add 1 beat buffer
         {
-            synth->allNotesOff(0, true);
+            audioEngine.allNotesOff();
             return false; // Stop the thread
         }
         
@@ -207,16 +177,15 @@ private:
                 
                 if (midimsg.isNoteOn())
                 {
-                    synth->noteOn(midimsg.getChannel(),
-                               midimsg.getNoteNumber(),
-                               midimsg.getVelocity() / 127.0f);
+                    audioEngine.noteOn(midimsg.getChannel(),
+                                    midimsg.getNoteNumber(),
+                                    midimsg.getVelocity() / 127.0f);
                 }
                 else if (midimsg.isNoteOff())
                 {
-                    synth->noteOff(midimsg.getChannel(),
-                                midimsg.getNoteNumber(),
-                                midimsg.getVelocity() / 127.0f,
-                                true);
+                    audioEngine.noteOff(midimsg.getChannel(),
+                                     midimsg.getNoteNumber(),
+                                     midimsg.getVelocity() / 127.0f);
                 }
                 
                 currentEvent++;
@@ -254,7 +223,7 @@ private:
 
     juce::CriticalSection lock;
     juce::MidiMessageSequence midiSequence;
-    juce::Synthesiser* synth = nullptr;
+    AudioEngine& audioEngine;
     
     int currentEvent = 0;
     double playbackPosition = 0.0;

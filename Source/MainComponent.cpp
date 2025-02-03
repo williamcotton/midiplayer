@@ -45,14 +45,8 @@ MainComponent::MainComponent()
         DBG("Tempo changed to: " + juce::String(tempo) + " BPM");
     };
     
-    // Initialize synthesizer
-    synth.addSound(new SineWaveSound());
-    for (int i = 0; i < 16; ++i)
-        synth.addVoice(new SineWaveVoice());
-        
     // Initialize MIDI processor
-    midiProcessor = std::make_unique<MidiProcessorThread>();
-    midiProcessor->setSynth(&synth);
+    midiProcessor = std::make_unique<MidiProcessorThread>(audioEngine);
     midiProcessor->setTempo(tempo);
     
     // Setup audio
@@ -105,22 +99,6 @@ void MainComponent::timerCallback()
     {
         pianoRoll.setPlaybackPosition(midiProcessor->getPlaybackPosition());
     }
-}
-
-void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
-{
-    synth.setCurrentPlaybackSampleRate(sampleRate);
-}
-
-void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
-{
-    bufferToFill.clearActiveBufferRegion();
-    synth.renderNextBlock(*bufferToFill.buffer, juce::MidiBuffer(),
-                         bufferToFill.startSample, bufferToFill.numSamples);
-}
-
-void MainComponent::releaseResources()
-{
 }
 
 void MainComponent::loadMidiFile()
