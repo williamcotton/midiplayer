@@ -241,7 +241,7 @@ void MainComponent::loadMidiFile()
         juce::FileBrowserComponent::openMode |
         juce::FileBrowserComponent::canSelectFiles;
     
-    auto* chooser = new juce::FileChooser(
+    auto chooser = std::make_shared<juce::FileChooser>(
         "Select a MIDI file",
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         "*.mid;*.midi");
@@ -281,7 +281,6 @@ void MainComponent::loadMidiFile()
                     }
                 }
             }
-            delete chooser;
         });
 }
 
