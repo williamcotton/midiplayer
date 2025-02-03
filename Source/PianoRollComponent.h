@@ -151,81 +151,81 @@ private:
 
         void paint(juce::Graphics& g) override
         {
-    // auto width = getWidth();
-    auto height = getHeight();
-    
-    // Constants
-    const float keyWidth = 40.0f;
-    
-    g.fillAll(juce::Colours::black);
+            // auto width = getWidth();
+            auto height = getHeight();
+            
+            // Constants
+            const float keyWidth = 40.0f;
+            
+            g.fillAll(juce::Colours::black);
 
-    // Draw grid first
-    g.setColour(juce::Colours::darkgrey);
-    for (int beat = 0; beat <= owner.numBeats; ++beat)
-    {
-        float x = keyWidth + static_cast<float>(beat * owner.pixelsPerBeat);
-        g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
-    }
+            // Draw grid first
+            g.setColour(juce::Colours::darkgrey);
+            for (int beat = 0; beat <= owner.numBeats; ++beat)
+            {
+                float x = keyWidth + static_cast<float>(beat * owner.pixelsPerBeat);
+                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
+            }
 
-    // Draw loop region if active
-    if (owner.isLooping)
-    {
-        g.setColour(juce::Colours::yellow.withAlpha(0.3f));
-        float x1 = keyWidth + static_cast<float>(owner.loopStartBeat * owner.pixelsPerBeat);
-        float x2 = keyWidth + static_cast<float>(owner.loopEndBeat * owner.pixelsPerBeat);
-        g.fillRect(x1, 0.0f, x2 - x1, static_cast<float>(height));
-    }
+            // Draw loop region if active
+            if (owner.isLooping)
+            {
+                g.setColour(juce::Colours::yellow.withAlpha(0.3f));
+                float x1 = keyWidth + static_cast<float>(owner.loopStartBeat * owner.pixelsPerBeat);
+                float x2 = keyWidth + static_cast<float>(owner.loopEndBeat * owner.pixelsPerBeat);
+                g.fillRect(x1, 0.0f, x2 - x1, static_cast<float>(height));
+            }
 
-    // Draw notes before piano keys to ensure they don't overlay
-    for (auto& note : owner.notes)
-    {
-        float x = keyWidth + static_cast<float>(note.startBeat * owner.pixelsPerBeat);
-        float w = static_cast<float>((note.endBeat - note.startBeat) * owner.pixelsPerBeat);
-        float y = height - (note.noteNumber + 1) * owner.pixelsPerNote;
-        
-        g.setColour(juce::Colour::fromHSV(
-            static_cast<float>(note.noteNumber) / 128.0f, 0.5f, 0.9f, 1.0f));
-        
-        g.fillRect(x, y, w, static_cast<float>(owner.pixelsPerNote));
-    }
+            // Draw notes before piano keys to ensure they don't overlay
+            for (auto& note : owner.notes)
+            {
+                float x = keyWidth + static_cast<float>(note.startBeat * owner.pixelsPerBeat);
+                float w = static_cast<float>((note.endBeat - note.startBeat) * owner.pixelsPerBeat);
+                float y = height - (note.noteNumber + 1) * owner.pixelsPerNote;
+                
+                g.setColour(juce::Colour::fromHSV(
+                    static_cast<float>(note.noteNumber) / 128.0f, 0.5f, 0.9f, 1.0f));
+                
+                g.fillRect(x, y, w, static_cast<float>(owner.pixelsPerNote));
+            }
 
-    // Draw piano keys as an overlay on the left
-    g.saveState();  // Save the current state to create a clipping region
-    g.reduceClipRegion(0, 0, static_cast<int>(keyWidth), height);  // Only draw keys in this region
-    
-    for (int note = 0; note < 128; ++note)
-    {
-        float y = height - (note + 1) * owner.pixelsPerNote;
-        bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
-        
-        // Draw white keys first
-        if (!isBlackKey)
-        {
+            // Draw piano keys as an overlay on the left
+            g.saveState();  // Save the current state to create a clipping region
+            g.reduceClipRegion(0, 0, static_cast<int>(keyWidth), height);  // Only draw keys in this region
+            
+            for (int note = 0; note < 128; ++note)
+            {
+                float y = height - (note + 1) * owner.pixelsPerNote;
+                bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
+                
+                // Draw white keys first
+                if (!isBlackKey)
+                {
+                    g.setColour(juce::Colours::white);
+                    g.fillRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
+                    g.setColour(juce::Colours::black);
+                    g.drawRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
+                }
+            }
+            
+            // Draw black keys on top
+            for (int note = 0; note < 128; ++note)
+            {
+                float y = height - (note + 1) * owner.pixelsPerNote;
+                bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
+                
+                if (isBlackKey)
+                {
+                    g.setColour(juce::Colours::black);
+                    g.fillRect(0.0f, y, keyWidth * 0.6f, static_cast<float>(owner.pixelsPerNote));
+                }
+            }
+            g.restoreState();  // Restore the previous clipping region
+
+            // Draw playback position line
+            float playbackX = keyWidth + static_cast<float>(owner.currentBeatPosition * owner.pixelsPerBeat);
             g.setColour(juce::Colours::white);
-            g.fillRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
-            g.setColour(juce::Colours::black);
-            g.drawRect(0.0f, y, keyWidth, static_cast<float>(owner.pixelsPerNote));
-        }
-    }
-    
-    // Draw black keys on top
-    for (int note = 0; note < 128; ++note)
-    {
-        float y = height - (note + 1) * owner.pixelsPerNote;
-        bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
-        
-        if (isBlackKey)
-        {
-            g.setColour(juce::Colours::black);
-            g.fillRect(0.0f, y, keyWidth * 0.6f, static_cast<float>(owner.pixelsPerNote));
-        }
-    }
-    g.restoreState();  // Restore the previous clipping region
-
-    // Draw playback position line
-    float playbackX = keyWidth + static_cast<float>(owner.currentBeatPosition * owner.pixelsPerBeat);
-    g.setColour(juce::Colours::white);
-    g.drawVerticalLine(static_cast<int>(playbackX), 0.0f, static_cast<float>(height));
+            g.drawVerticalLine(static_cast<int>(playbackX), 0.0f, static_cast<float>(height));
         }
 
     private:
