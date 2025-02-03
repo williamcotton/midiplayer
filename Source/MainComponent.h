@@ -4,7 +4,8 @@
 
 class MainComponent : public juce::Component,
                      public juce::Timer,
-                     public juce::AudioSource
+                     public juce::AudioSource,
+                     public juce::KeyListener
 {
 public:
     MainComponent();
@@ -17,6 +18,9 @@ public:
     void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
     void getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) override;
     void releaseResources() override;
+    
+    bool keyPressed(const juce::KeyPress& key, Component* originatingComponent) override;
+    bool keyStateChanged(bool isKeyDown) override { return false; }
 
 private:
     void loadMidiFile();

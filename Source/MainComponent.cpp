@@ -2,6 +2,10 @@
 
 MainComponent::MainComponent()
 {
+    // Enable keyboard input
+    setWantsKeyboardFocus(true);
+    addKeyListener(this);
+    
     addAndMakeVisible(loadButton);
     addAndMakeVisible(playButton);
     addAndMakeVisible(stopButton);
@@ -390,4 +394,21 @@ int MainComponent::findEventAtTime(double timeStamp)
             return i;
     }
     return midiSequence.getNumEvents();
+}
+
+bool MainComponent::keyPressed(const juce::KeyPress& key, Component* originatingComponent)
+{
+    // Check if spacebar was pressed
+    if (key == juce::KeyPress::spaceKey)
+    {
+        // Toggle playback
+        if (isPlaying)
+            stopMidiFile();
+        else if (playButton.isEnabled()) // Only start if we have a file loaded
+            playMidiFile();
+            
+        return true; // Key was handled
+    }
+    
+    return false; // Key wasn't handled
 }
