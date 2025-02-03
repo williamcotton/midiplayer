@@ -16,6 +16,7 @@ public:
         const juce::ScopedLock sl(lock);
         midiSequence = sequence;
         currentEvent = 0;
+        resetLoopState();
     }
 
     void setTempo(double newTempo)
@@ -30,7 +31,11 @@ public:
         loopStartBeat = start;
         loopEndBeat = end;
         loopCount = count;
+        originalLoopCount = count;  // Store the original count
         currentLoopIteration = 0;
+        DBG("Set loop region: start=" + juce::String(start) + 
+            " end=" + juce::String(end) + 
+            " count=" + juce::String(count));
     }
 
     void startPlayback()
@@ -41,7 +46,7 @@ public:
             // Reset all state
             playbackPosition = 0.0;
             currentEvent = 0;
-            currentLoopIteration = 0;
+            resetLoopState();
             
             // Turn off any lingering notes
             audioEngine.allNotesOff();
@@ -59,7 +64,7 @@ public:
             // Reset state
             playbackPosition = beatPosition;
             currentEvent = findEventAtTime(convertBeatsToTicks(beatPosition));
-            currentLoopIteration = 0;
+            resetLoopState();
             
             // Turn off any lingering notes
             audioEngine.allNotesOff();
@@ -73,7 +78,12 @@ public:
     {
         signalThreadShouldExit();
         stopThread(2000);
+        
+        const juce::ScopedLock sl(lock);
         audioEngine.allNotesOff();
+        resetLoopState();
+        currentEvent = 0;
+        playbackPosition = 0.0;
     }
 
     double getPlaybackPosition() const
@@ -83,6 +93,12 @@ public:
     }
 
 private:
+    void resetLoopState()
+    {
+        currentLoopIteration = 0;
+        loopCount = originalLoopCount;  // Restore the original count
+    }
+
     void run() override
     {
         while (!threadShouldExit())
@@ -144,8 +160,40 @@ private:
             {
                 // End of last loop iteration - continue playing from loop end
                 audioEngine.allNotesOff();
+                
+                // Set the position exactly at loop end
+                newPosition = loopEndBeat;
+                
+                // Find the first event after the loop end point
                 currentEvent = findEventAtTime(convertBeatsToTicks(loopEndBeat));
-                // Set loop count to 0 to prevent further looping
+                
+                // Step back one event to catch any notes that might start exactly at the loop end
+                if (currentEvent > 0)
+                    currentEvent--;
+                
+                // Scan for any notes that should be playing at loop end
+                for (int i = 0; i < currentEvent; ++i)
+                {
+                    auto* event = midiSequence.getEventPointer(i);
+                    if (event->message.isNoteOn())
+                    {
+                        auto noteOff = event->noteOffObject;
+                        if (noteOff != nullptr)
+                        {
+                            auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
+                            auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
+                            
+                            if (noteOnTime <= newPosition && noteOffTime > newPosition)
+                            {
+                                audioEngine.noteOn(event->message.getChannel(),
+                                                event->message.getNoteNumber(),
+                                                event->message.getVelocity() / 127.0f);
+                            }
+                        }
+                    }
+                }
+                
+                // Disable looping
                 loopCount = 0;
             }
         }
@@ -225,6 +273,7 @@ private:
     juce::MidiMessageSequence midiSequence;
     AudioEngine& audioEngine;
     
+    int originalLoopCount = 0; // Store the original loop count
     int currentEvent = 0;
     double playbackPosition = 0.0;
     double lastProcessTimeMs = 0.0;
