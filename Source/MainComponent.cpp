@@ -250,34 +250,41 @@ void MainComponent::loadMidiFile()
         [this, chooser](const juce::FileChooser& fc)
         {
             auto result = fc.getResult();
+            std::unique_ptr<juce::InputStream> stream;
             
-            if (result.exists())
+            #if JUCE_ANDROID
+            juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
+            stream = fc.getURLResult().createInputStream(options);
+            #else
+            if (result.exists()) {
+                stream = std::make_unique<juce::FileInputStream>(result);
+            }
+            #endif
+            
+            if (stream != nullptr)
             {
-                auto stream = std::make_unique<juce::FileInputStream>(result);
-                
-                if (stream->openedOk())
+                DBG("Stream opened successfully");
+                if (midiFile.readFrom(*stream))
                 {
-                    if (midiFile.readFrom(*stream))
+                    DBG("MIDI file read successfully");
+                    if (midiFile.getNumTracks() > 0)
                     {
-                        if (midiFile.getNumTracks() > 0)
+                        midiSequence = *midiFile.getTrack(0);
+                        
+                        for (int i = 1; i < midiFile.getNumTracks(); ++i)
                         {
-                            midiSequence = *midiFile.getTrack(0);
-                            
-                            for (int i = 1; i < midiFile.getNumTracks(); ++i)
-                            {
-                                midiSequence.addSequence(*midiFile.getTrack(i),
-                                                       0.0, 0.0,
-                                                       midiFile.getLastTimestamp());
-                            }
-                            
-                            midiSequence.updateMatchedPairs();
-                            pianoRoll.setMidiSequence(midiSequence);
-                            playButton.setEnabled(true);
-                            stopButton.setEnabled(false);
-                            currentEvent = 0;
-                            playbackPosition = 0.0;  // Now in beats
-                            lastTime = juce::Time::getMillisecondCounterHiRes();
+                            midiSequence.addSequence(*midiFile.getTrack(i),
+                                                   0.0, 0.0,
+                                                   midiFile.getLastTimestamp());
                         }
+                        
+                        midiSequence.updateMatchedPairs();
+                        pianoRoll.setMidiSequence(midiSequence);
+                        playButton.setEnabled(true);
+                        stopButton.setEnabled(false);
+                        currentEvent = 0;
+                        playbackPosition = 0.0;
+                        lastTime = juce::Time::getMillisecondCounterHiRes();
                     }
                 }
             }
