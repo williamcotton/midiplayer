@@ -151,7 +151,7 @@ private:
 
         void paint(juce::Graphics& g) override
         {
-    auto width = getWidth();
+    // auto width = getWidth();
     auto height = getHeight();
     
     // Constants

@@ -300,7 +300,7 @@ void MainComponent::playMidiFile()
         // make sure we process any notes that should be playing
         if (pianoRoll.isPositionInLoop(playbackPosition))
         {
-            double loopStartTicks  = convertBeatsToTicks(playbackPosition);
+            // double loopStartTicks  = convertBeatsToTicks(playbackPosition);
             
             // Find notes that should be playing at this position
             for (int i = 0; i < currentEvent; ++i)

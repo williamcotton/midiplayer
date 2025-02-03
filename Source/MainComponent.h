@@ -18,9 +18,25 @@ public:
     void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
     void getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) override;
     void releaseResources() override;
-    
+
+    // We need to implement both Component's and KeyListener's versions of keyboard event handlers
+    // to avoid hiding virtual functions. Component has single-parameter versions while KeyListener 
+    // has two-parameter versions. Here we handle both by forwarding the Component versions to our
+    // KeyListener implementations to maintain consistent keyboard event handling.
+    bool keyPressed(const juce::KeyPress& key) override
+    {
+        return keyPressed(key, this);
+    }
     bool keyPressed(const juce::KeyPress& key, Component* originatingComponent) override;
-    bool keyStateChanged(bool isKeyDown) override { return false; }
+
+    bool keyStateChanged(bool isKeyDown) override
+    {
+        return keyStateChanged(isKeyDown, this);
+    }
+    bool keyStateChanged(bool isKeyDown, Component* originatingComponent) override
+    {
+        return false;
+    }
 
 private:
     void loadMidiFile();
