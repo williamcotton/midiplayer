@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "MidiPlayer.h"
 
 MainComponent::MainComponent()
 {
@@ -27,6 +28,9 @@ MainComponent::MainComponent()
     stopButton.onClick = [this]() { stopMidiFile(); };
     setLoopButton.onClick = [this]() { setupLoopRegion(); };
     clearLoopButton.onClick = [this]() { clearLoopRegion(); };
+
+    // MidiPlayer
+    midiPlayer = std::make_unique<MidiPlayer>();
     
     // Setup tempo control
     addAndMakeVisible(tempoSlider);
@@ -37,8 +41,8 @@ MainComponent::MainComponent()
     tempoSlider.setValue(120.0, juce::dontSendNotification);
     tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
     tempoSlider.onValueChange = [this] { 
-        tempo = tempoSlider.getValue();
-        DBG("Tempo changed to: " + juce::String(tempo) + " BPM");
+        midiPlayer->tempo = tempoSlider.getValue();
+        DBG("Tempo changed to: " + juce::String(midiPlayer->tempo) + " BPM");
     };
     
     setSize(800, 600);
@@ -117,7 +121,7 @@ void MainComponent::timerCallback()
     {
         auto currentTime = juce::Time::getMillisecondCounterHiRes();
         auto deltaTimeMs = currentTime - lastTime;
-        auto deltaBeats = convertMillisecondsToBeats(deltaTimeMs);
+        auto deltaBeats = midiPlayer->convertMillisecondsToBeats(deltaTimeMs);
         
         // Update position in beats
         auto newPosition = playbackPosition + deltaBeats;
@@ -133,13 +137,13 @@ void MainComponent::timerCallback()
                     synth.allNotesOff(0, true);
                     
                     newPosition = pianoRoll.getLoopStartBeat();
-                    double loopStartTicks = convertBeatsToTicks(newPosition);
+                    double loopStartTicks = midiPlayer->convertBeatsToTicks(newPosition);
                     
                     // Find the first event that's at or after our loop start point
                     currentEvent = 0;
-                    while (currentEvent < midiSequence.getNumEvents())
+                    while (currentEvent < midiPlayer->midiSequence.getNumEvents())
                     {
-                        auto eventTime = midiSequence.getEventPointer(currentEvent)->message.getTimeStamp();
+                        auto eventTime = midiPlayer->midiSequence.getEventPointer(currentEvent)->message.getTimeStamp();
                         if (eventTime >= loopStartTicks)
                             break;
                         currentEvent++;
@@ -152,14 +156,14 @@ void MainComponent::timerCallback()
                     // Scan for notes that should be playing at loop start
                     for (int i = 0; i < currentEvent; ++i)
                     {
-                        auto* event = midiSequence.getEventPointer(i);
+                        auto* event = midiPlayer->midiSequence.getEventPointer(i);
                         if (event->message.isNoteOn())
                         {
                             auto noteOff = event->noteOffObject;
                             if (noteOff != nullptr)
                             {
-                                auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
-                                auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
+                                auto noteOnTime = midiPlayer->convertTicksToBeats(event->message.getTimeStamp());
+                                auto noteOffTime = midiPlayer->convertTicksToBeats(noteOff->message.getTimeStamp());
                                 
                                 if (noteOnTime <= newPosition && noteOffTime > newPosition)
                                 {
@@ -180,11 +184,11 @@ void MainComponent::timerCallback()
         {
             // Find the last event timestamp in ticks
             double lastEventTime = 0.0;
-            for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+            for (int i = 0; i < midiPlayer->midiSequence.getNumEvents(); ++i)
             {
-                lastEventTime = std::max(lastEventTime, midiSequence.getEventPointer(i)->message.getTimeStamp());
+                lastEventTime = std::max(lastEventTime, midiPlayer->midiSequence.getEventPointer(i)->message.getTimeStamp());
             }
-            double lastEventBeat = convertTicksToBeats(lastEventTime);
+            double lastEventBeat = midiPlayer->convertTicksToBeats(lastEventTime);
             
             // If we've reached the end of the sequence and we're not looping
             if (newPosition >= lastEventBeat + 1.0)
@@ -195,14 +199,14 @@ void MainComponent::timerCallback()
         }
         
         // Process MIDI events
-        while (currentEvent < midiSequence.getNumEvents())
+        while (currentEvent < midiPlayer->midiSequence.getNumEvents())
         {
-            auto eventTime = convertTicksToBeats(
-                midiSequence.getEventPointer(currentEvent)->message.getTimeStamp());
+            auto eventTime = midiPlayer->convertTicksToBeats(
+                midiPlayer->midiSequence.getEventPointer(currentEvent)->message.getTimeStamp());
                 
             if (eventTime <= newPosition)
             {
-                auto& midimsg = midiSequence.getEventPointer(currentEvent)->message;
+                auto& midimsg = midiPlayer->midiSequence.getEventPointer(currentEvent)->message;
                 
                 if (midimsg.isNoteOn())
                 {
@@ -264,22 +268,22 @@ void MainComponent::loadMidiFile()
             if (stream != nullptr)
             {
                 DBG("Stream opened successfully");
-                if (midiFile.readFrom(*stream))
+                if (midiPlayer->midiFile.readFrom(*stream))
                 {
                     DBG("MIDI file read successfully");
-                    if (midiFile.getNumTracks() > 0)
+                    if (midiPlayer->midiFile.getNumTracks() > 0)
                     {
-                        midiSequence = *midiFile.getTrack(0);
+                        midiPlayer->midiSequence = *midiPlayer->midiFile.getTrack(0);
                         
-                        for (int i = 1; i < midiFile.getNumTracks(); ++i)
+                        for (int i = 1; i < midiPlayer->midiFile.getNumTracks(); ++i)
                         {
-                            midiSequence.addSequence(*midiFile.getTrack(i),
+                            midiPlayer->midiSequence.addSequence(*midiPlayer->midiFile.getTrack(i),
                                                    0.0, 0.0,
-                                                   midiFile.getLastTimestamp());
+                                                   midiPlayer->midiFile.getLastTimestamp());
                         }
                         
-                        midiSequence.updateMatchedPairs();
-                        pianoRoll.setMidiSequence(midiSequence);
+                        midiPlayer->midiSequence.updateMatchedPairs();
+                        pianoRoll.setMidiSequence(midiPlayer->midiSequence);
                         playButton.setEnabled(true);
                         stopButton.setEnabled(false);
                         currentEvent = 0;
@@ -293,7 +297,7 @@ void MainComponent::loadMidiFile()
 
 void MainComponent::playMidiFile()
 {
-    if (currentEvent < midiSequence.getNumEvents())
+    if (currentEvent < midiPlayer->midiSequence.getNumEvents())
     {
         isPlaying = true;
         lastTime = juce::Time::getMillisecondCounterHiRes();
@@ -312,15 +316,15 @@ void MainComponent::playMidiFile()
             // Find notes that should be playing at this position
             for (int i = 0; i < currentEvent; ++i)
             {
-                auto* event = midiSequence.getEventPointer(i);
-                auto eventTime = convertTicksToBeats(event->message.getTimeStamp());
+                auto* event = midiPlayer->midiSequence.getEventPointer(i);
+                auto eventTime = midiPlayer->convertTicksToBeats(event->message.getTimeStamp());
                 
                 if (event->message.isNoteOn())
                 {
                     auto noteOff = event->noteOffObject;
                     if (noteOff != nullptr)
                     {
-                        auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
+                        auto noteOffTime = midiPlayer->convertTicksToBeats(noteOff->message.getTimeStamp());
                         if (eventTime <= playbackPosition && noteOffTime > playbackPosition)
                         {
                             synth.noteOn(event->message.getChannel(),
@@ -394,12 +398,12 @@ void MainComponent::clearLoopRegion()
 
 int MainComponent::findEventAtTime(double timeStamp)
 {
-    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+    for (int i = 0; i < midiPlayer->midiSequence.getNumEvents(); ++i)
     {
-        if (midiSequence.getEventPointer(i)->message.getTimeStamp() >= timeStamp)
+        if (midiPlayer->midiSequence.getEventPointer(i)->message.getTimeStamp() >= timeStamp)
             return i;
     }
-    return midiSequence.getNumEvents();
+    return midiPlayer->midiSequence.getNumEvents();
 }
 
 bool MainComponent::keyPressed(const juce::KeyPress& key, Component* originatingComponent)

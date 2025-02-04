@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "PianoRollComponent.h"
+#include "MidiPlayer.h"
 
 class MainComponent : public juce::Component,
                      public juce::Timer,
@@ -45,31 +46,11 @@ private:
     void setupLoopRegion();
     void clearLoopRegion();
     int findEventAtTime(double timeStamp);
-    double convertTicksToBeats(double ticks) const
-    {
-        return ticks / 480.0; // assuming standard MIDI PPQ
-    }
-    
-    double convertBeatsToTicks(double beats) const
-    {
-        return beats * 480.0;
-    }
-    
-    double convertMillisecondsToBeats(double ms) const
-    {
-        // Convert ms to beats based on tempo
-        return (ms / 1000.0) * (tempo / 60.0);
-    }
-    
-    double convertBeatsToMilliseconds(double beats) const
-    {
-        // Convert beats to ms based on tempo
-        return (beats * 60.0 / tempo) * 1000.0;
-    }
 
     // Audio setup
     juce::AudioDeviceManager audioDeviceManager;
     juce::AudioSourcePlayer audioSourcePlayer;
+    std::unique_ptr<MidiPlayer> midiPlayer;
     
     // GUI components
     juce::TextButton loadButton;
@@ -80,8 +61,6 @@ private:
     PianoRollComponent pianoRoll;
 
     // MIDI handling
-    juce::MidiFile midiFile;
-    juce::MidiMessageSequence midiSequence;
     juce::Synthesiser synth;
 
     // Synthesizer voice
@@ -183,7 +162,6 @@ private:
     double playbackPosition = 0.0;
     double lastTime = 0.0;
     int currentLoopIteration = 0;
-    double tempo = 120.0; // BPM
     juce::Slider tempoSlider;
     juce::Label tempoLabel;
 

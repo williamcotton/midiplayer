@@ -36,6 +36,8 @@ add_library( ${BINARY_NAME}
 
     SHARED
 
+    "../../../Source/MidiPlayer.cpp"
+    "../../../Source/MidiPlayer.h"
     "../../../Source/PianoRollComponent.h"
     "../../../Source/MainComponent.h"
     "../../../Source/Main.cpp"
@@ -2296,6 +2298,7 @@ add_library( ${BINARY_NAME}
 )
 
 set_source_files_properties(
+    "../../../Source/MidiPlayer.h"
     "../../../Source/PianoRollComponent.h"
     "../../../Source/MainComponent.h"
     "../../../../../../../JUCE/modules/juce_audio_basics/audio_play_head/juce_AudioPlayHead.cpp"

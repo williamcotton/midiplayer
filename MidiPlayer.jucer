@@ -4,6 +4,8 @@
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
   <MAINGROUP id="xCpQIz" name="MidiPlayer">
     <GROUP id="{95E561C4-6E78-D90A-5347-EF77B013A7DB}" name="Source">
+      <FILE id="qEt3aq" name="MidiPlayer.cpp" compile="1" resource="0" file="Source/MidiPlayer.cpp"/>
+      <FILE id="lg8JoM" name="MidiPlayer.h" compile="0" resource="0" file="Source/MidiPlayer.h"/>
       <FILE id="aI6XUM" name="PianoRollComponent.h" compile="0" resource="0"
             file="Source/PianoRollComponent.h"/>
       <FILE id="HZn9Ep" name="MainComponent.h" compile="0" resource="0" file="Source/MainComponent.h"/>
