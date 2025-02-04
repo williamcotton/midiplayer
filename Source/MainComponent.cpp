@@ -31,6 +31,16 @@ MainComponent::MainComponent()
 
     // MidiPlayer
     midiPlayer = std::make_unique<MidiPlayer>();
+    midiPlayer->setOnMidiFileLoadedCallback(
+        [this](const juce::MidiMessageSequence& sequence)
+        {
+            pianoRoll.setMidiSequence(sequence);
+            playButton.setEnabled(true);
+            stopButton.setEnabled(false);
+            currentEvent = 0;
+            playbackPosition = 0.0;
+            lastTime = juce::Time::getMillisecondCounterHiRes();
+        });
     
     // Setup tempo control
     addAndMakeVisible(tempoSlider);
@@ -241,58 +251,7 @@ void MainComponent::timerCallback()
 
 void MainComponent::loadMidiFile()
 {
-    auto fileChooserFlags =
-        juce::FileBrowserComponent::openMode |
-        juce::FileBrowserComponent::canSelectFiles;
-    
-    auto chooser = std::make_shared<juce::FileChooser>(
-        "Select a MIDI file",
-        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
-        "*.mid;*.midi");
-        
-    chooser->launchAsync(fileChooserFlags,
-        [this, chooser](const juce::FileChooser& fc)
-        {
-            auto result = fc.getResult();
-            std::unique_ptr<juce::InputStream> stream;
-            
-            #if JUCE_ANDROID
-            juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
-            stream = fc.getURLResult().createInputStream(options);
-            #else
-            if (result.exists()) {
-                stream = std::make_unique<juce::FileInputStream>(result);
-            }
-            #endif
-            
-            if (stream != nullptr)
-            {
-                DBG("Stream opened successfully");
-                if (midiPlayer->midiFile.readFrom(*stream))
-                {
-                    DBG("MIDI file read successfully");
-                    if (midiPlayer->midiFile.getNumTracks() > 0)
-                    {
-                        midiPlayer->midiSequence = *midiPlayer->midiFile.getTrack(0);
-                        
-                        for (int i = 1; i < midiPlayer->midiFile.getNumTracks(); ++i)
-                        {
-                            midiPlayer->midiSequence.addSequence(*midiPlayer->midiFile.getTrack(i),
-                                                   0.0, 0.0,
-                                                   midiPlayer->midiFile.getLastTimestamp());
-                        }
-                        
-                        midiPlayer->midiSequence.updateMatchedPairs();
-                        pianoRoll.setMidiSequence(midiPlayer->midiSequence);
-                        playButton.setEnabled(true);
-                        stopButton.setEnabled(false);
-                        currentEvent = 0;
-                        playbackPosition = 0.0;
-                        lastTime = juce::Time::getMillisecondCounterHiRes();
-                    }
-                }
-            }
-        });
+    midiPlayer->loadMidiFile();
 }
 
 void MainComponent::playMidiFile()
