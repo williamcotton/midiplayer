@@ -31,15 +31,43 @@ MainComponent::MainComponent()
 
     // MidiPlayer
     midiPlayer = std::make_unique<MidiPlayer>();
-    midiPlayer->setOnMidiFileLoadedCallback(
+    
+    // Set up MidiPlayer callbacks
+    midiPlayer->setOnMidiFileLoaded(
         [this](const juce::MidiMessageSequence& sequence)
         {
             pianoRoll.setMidiSequence(sequence);
             playButton.setEnabled(true);
             stopButton.setEnabled(false);
-            currentEvent = 0;
-            playbackPosition = 0.0;
             lastTime = juce::Time::getMillisecondCounterHiRes();
+        });
+        
+    midiPlayer->setOnPlaybackPosition(
+        [this](double position)
+        {
+            playbackPosition = position;
+            pianoRoll.setPlaybackPosition(position);
+        });
+        
+    midiPlayer->setOnPlaybackState(
+        [this](bool playing)
+        {
+            playButton.setEnabled(!playing);
+            stopButton.setEnabled(playing);
+        });
+        
+    midiPlayer->setOnAllNotesOff(
+        [this]()
+        {
+            synth.allNotesOff(0, true);
+            // Also explicitly turn off all notes to be extra safe
+            for (int channel = 1; channel <= 16; ++channel)
+            {
+                for (int note = 0; note < 128; ++note)
+                {
+                    synth.noteOff(channel, note, 0.0f, true);
+                }
+            }
         });
     
     // Setup tempo control
@@ -129,123 +157,15 @@ void MainComponent::timerCallback()
 {
     if (isPlaying)
     {
-        auto currentTime = juce::Time::getMillisecondCounterHiRes();
-        auto deltaTimeMs = currentTime - lastTime;
-        auto deltaBeats = midiPlayer->convertMillisecondsToBeats(deltaTimeMs);
-        
-        // Update position in beats
-        auto newPosition = playbackPosition + deltaBeats;
-        
-        // Check for looping first
-        if (pianoRoll.isPositionInLoop(playbackPosition))
-        {
-            if ((currentLoopIteration + 1) < pianoRoll.getLoopCount())
-            {
-                if (newPosition >= pianoRoll.getLoopEndBeat())
-                {
-                    // Turn off all currently playing notes before loop
-                    synth.allNotesOff(0, true);
-                    
-                    newPosition = pianoRoll.getLoopStartBeat();
-                    double loopStartTicks = midiPlayer->convertBeatsToTicks(newPosition);
-                    
-                    // Find the first event that's at or after our loop start point
-                    currentEvent = 0;
-                    while (currentEvent < midiPlayer->midiSequence.getNumEvents())
-                    {
-                        auto eventTime = midiPlayer->midiSequence.getEventPointer(currentEvent)->message.getTimeStamp();
-                        if (eventTime >= loopStartTicks)
-                            break;
-                        currentEvent++;
-                    }
-                    
-                    // Step back one event to catch any notes that might start exactly at the loop point
-                    if (currentEvent > 0)
-                        currentEvent--;
-                        
-                    // Scan for notes that should be playing at loop start
-                    for (int i = 0; i < currentEvent; ++i)
-                    {
-                        auto* event = midiPlayer->midiSequence.getEventPointer(i);
-                        if (event->message.isNoteOn())
-                        {
-                            auto noteOff = event->noteOffObject;
-                            if (noteOff != nullptr)
-                            {
-                                auto noteOnTime = midiPlayer->convertTicksToBeats(event->message.getTimeStamp());
-                                auto noteOffTime = midiPlayer->convertTicksToBeats(noteOff->message.getTimeStamp());
-                                
-                                if (noteOnTime <= newPosition && noteOffTime > newPosition)
-                                {
-                                    synth.noteOn(event->message.getChannel(),
-                                               event->message.getNoteNumber(),
-                                               event->message.getVelocity() / 127.0f);
-                                }
-                            }
-                        }
-                    }
-                    
-                    currentLoopIteration++;
-                }
-            }
-        }
-        // Only check for sequence end if we're not looping
-        else
-        {
-            // Find the last event timestamp in ticks
-            double lastEventTime = 0.0;
-            for (int i = 0; i < midiPlayer->midiSequence.getNumEvents(); ++i)
-            {
-                lastEventTime = std::max(lastEventTime, midiPlayer->midiSequence.getEventPointer(i)->message.getTimeStamp());
-            }
-            double lastEventBeat = midiPlayer->convertTicksToBeats(lastEventTime);
-            
-            // If we've reached the end of the sequence and we're not looping
-            if (newPosition >= lastEventBeat + 1.0)
-            {
-                stopMidiFile();
-                return;
-            }
-        }
-        
-        // Process MIDI events
-        while (currentEvent < midiPlayer->midiSequence.getNumEvents())
-        {
-            auto eventTime = midiPlayer->convertTicksToBeats(
-                midiPlayer->midiSequence.getEventPointer(currentEvent)->message.getTimeStamp());
-                
-            if (eventTime <= newPosition)
-            {
-                auto& midimsg = midiPlayer->midiSequence.getEventPointer(currentEvent)->message;
-                
-                if (midimsg.isNoteOn())
-                {
-                    synth.noteOn(midimsg.getChannel(),
-                               midimsg.getNoteNumber(),
-                               midimsg.getVelocity() / 127.0f);
-                }
-                else if (midimsg.isNoteOff())
-                {
-                    synth.noteOff(midimsg.getChannel(),
-                                midimsg.getNoteNumber(),
-                                midimsg.getVelocity() / 127.0f,
-                                true);
-                }
-                
-                currentEvent++;
-            }
-            else
-            {
-                break;
-            }
-        }
-        
-        // Update position for next callback
-        playbackPosition = newPosition;
-        lastTime = currentTime;
-        
-        // Update piano roll display
-        pianoRoll.setPlaybackPosition(playbackPosition);
+        midiPlayer->update(
+            [this](double pos) { return pianoRoll.isPositionInLoop(pos); },
+            [this]() { return pianoRoll.getLoopStartBeat(); },
+            [this]() { return pianoRoll.getLoopEndBeat(); },
+            [this]() { return pianoRoll.getLoopCount(); },
+            [this](int channel, int noteNumber, float velocity) { synth.noteOn(channel, noteNumber, velocity); },
+            [this](int channel, int noteNumber, float velocity) { synth.noteOff(channel, noteNumber, velocity, true); },
+            [this]() { synth.allNotesOff(0, true); }
+        );
     }
 }
 
@@ -256,66 +176,14 @@ void MainComponent::loadMidiFile()
 
 void MainComponent::playMidiFile()
 {
-    if (currentEvent < midiPlayer->midiSequence.getNumEvents())
-    {
-        isPlaying = true;
-        lastTime = juce::Time::getMillisecondCounterHiRes();
-        playButton.setEnabled(false);
-        stopButton.setEnabled(true);
-        
-        // Reset loop iteration counter when starting playback
-        currentLoopIteration = 0;
-        
-        // If we're starting from a position within the loop region,
-        // make sure we process any notes that should be playing
-        if (pianoRoll.isPositionInLoop(playbackPosition))
-        {
-            // double loopStartTicks  = convertBeatsToTicks(playbackPosition);
-            
-            // Find notes that should be playing at this position
-            for (int i = 0; i < currentEvent; ++i)
-            {
-                auto* event = midiPlayer->midiSequence.getEventPointer(i);
-                auto eventTime = midiPlayer->convertTicksToBeats(event->message.getTimeStamp());
-                
-                if (event->message.isNoteOn())
-                {
-                    auto noteOff = event->noteOffObject;
-                    if (noteOff != nullptr)
-                    {
-                        auto noteOffTime = midiPlayer->convertTicksToBeats(noteOff->message.getTimeStamp());
-                        if (eventTime <= playbackPosition && noteOffTime > playbackPosition)
-                        {
-                            synth.noteOn(event->message.getChannel(),
-                                       event->message.getNoteNumber(),
-                                       event->message.getVelocity() / 127.0f);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    isPlaying = true;
+    midiPlayer->play();
 }
 
 void MainComponent::stopMidiFile()
 {
     isPlaying = false;
-    // Turn off all notes with a proper release
-    synth.allNotesOff(0, true);
-    // Also explicitly turn off all notes to be extra safe
-    for (int channel = 1; channel <= 16; ++channel)
-    {
-        for (int note = 0; note < 128; ++note)
-        {
-            synth.noteOff(channel, note, 0.0f, true);
-        }
-    }
-    
-    currentEvent = 0;
-    playbackPosition = 0.0;
-    currentLoopIteration = 0;  // Reset loop iteration counter when stopping
-    playButton.setEnabled(true);
-    stopButton.setEnabled(false);
+    midiPlayer->stop();
 }
 
 void MainComponent::setupLoopRegion()
@@ -343,7 +211,6 @@ void MainComponent::setupLoopRegion()
                     int loops = dialogWindow->getTextEditorContents("loopCount").getIntValue();
                     
                     pianoRoll.setLoopRegion(startBeat, endBeat, loops);
-                    currentLoopIteration = 0;
                 }
             }
         ));
@@ -351,8 +218,7 @@ void MainComponent::setupLoopRegion()
 
 void MainComponent::clearLoopRegion()
 {
-    pianoRoll.setLoopRegion(0, 0, 0);
-    currentLoopIteration = 0;  // Reset loop iteration counter when clearing loop
+    pianoRoll.setLoopRegion(0, 0, 0); // Reset loop iteration counter when clearing loop
 }
 
 int MainComponent::findEventAtTime(double timeStamp)

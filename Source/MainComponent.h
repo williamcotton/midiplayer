@@ -158,10 +158,8 @@ private:
 
     // Playback state
     bool isPlaying = false;
-    int currentEvent = 0;
     double playbackPosition = 0.0;
     double lastTime = 0.0;
-    int currentLoopIteration = 0;
     juce::Slider tempoSlider;
     juce::Label tempoLabel;
 
