@@ -13,6 +13,7 @@ public:
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+    bool isPositionInLoop(double beat) const;
     void timerCallback() override;
     
     void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
@@ -186,6 +187,10 @@ private:
     double tempo = 120.0; // BPM
     juce::Slider tempoSlider;
     juce::Label tempoLabel;
+    double loopStartBeat;
+    double loopEndBeat;
+    int loopCount;
+    bool isLooping;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

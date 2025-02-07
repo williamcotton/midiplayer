@@ -111,6 +111,11 @@ void MainComponent::releaseResources()
 {
 }
 
+bool MainComponent::isPositionInLoop(double beat) const
+{
+    return isLooping && beat >= loopStartBeat && beat < loopEndBeat;
+}
+
 void MainComponent::timerCallback()
 {
     if (isPlaying)
@@ -123,16 +128,16 @@ void MainComponent::timerCallback()
         auto newPosition = playbackPosition + deltaBeats;
         
         // Check for looping first
-        if (pianoRoll.isPositionInLoop(playbackPosition))
+        if (isPositionInLoop(playbackPosition))
         {
-            if ((currentLoopIteration + 1) < pianoRoll.getLoopCount())
+            if ((currentLoopIteration + 1) < loopCount) // loopCount
             {
-                if (newPosition >= pianoRoll.getLoopEndBeat())
+                if (newPosition >= loopEndBeat) // loopEndBeat
                 {
                     // Turn off all currently playing notes before loop
                     synth.allNotesOff(0, true);
                     
-                    newPosition = pianoRoll.getLoopStartBeat();
+                    newPosition = loopStartBeat; // loopStartBeat
                     double loopStartTicks = convertBeatsToTicks(newPosition);
                     
                     // Find the first event that's at or after our loop start point
@@ -305,7 +310,7 @@ void MainComponent::playMidiFile()
         
         // If we're starting from a position within the loop region,
         // make sure we process any notes that should be playing
-        if (pianoRoll.isPositionInLoop(playbackPosition))
+        if (isPositionInLoop(playbackPosition))
         {
             // double loopStartTicks  = convertBeatsToTicks(playbackPosition);
             
@@ -380,6 +385,11 @@ void MainComponent::setupLoopRegion()
                     int loops = dialogWindow->getTextEditorContents("loopCount").getIntValue();
                     
                     pianoRoll.setLoopRegion(startBeat, endBeat, loops);
+
+                    loopStartBeat = startBeat;
+                    loopEndBeat = endBeat;
+                    loopCount = loops;
+                    isLooping = (loopCount > 0);
                     currentLoopIteration = 0;
                 }
             }
@@ -389,6 +399,11 @@ void MainComponent::setupLoopRegion()
 void MainComponent::clearLoopRegion()
 {
     pianoRoll.setLoopRegion(0, 0, 0);
+
+    loopStartBeat = 0;
+    loopEndBeat = 0;
+    loopCount = 0;
+    isLooping = false;
     currentLoopIteration = 0;  // Reset loop iteration counter when clearing loop
 }
 

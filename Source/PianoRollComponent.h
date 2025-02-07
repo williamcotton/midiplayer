@@ -99,11 +99,6 @@ public:
         repaint();
     }
 
-    bool isPositionInLoop(double beat) const
-    {
-        return isLooping && beat >= loopStartBeat && beat < loopEndBeat;
-    }
-
     int getLoopCount() const { return loopCount; }
     double getLoopStartBeat() const { return loopStartBeat; }
     double getLoopEndBeat() const { return loopEndBeat; }
