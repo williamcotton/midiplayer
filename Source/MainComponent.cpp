@@ -78,7 +78,17 @@ void MainComponent::resized()
     auto area = getLocalBounds();
     auto buttonHeight = 40;
     auto padding = 10;
-    
+
+#if JUCE_IOS
+    // Account for iOS safe area at the top
+    if (auto *display =
+            juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()) {
+      auto safeInsets = display->safeAreaInsets;
+      area.removeFromTop(safeInsets.getTop());
+      area.removeFromBottom(safeInsets.getBottom());
+    }
+#endif
+
     auto topControls = area.removeFromTop(buttonHeight);
     loadButton.setBounds(topControls.removeFromLeft(120).reduced(padding, 0));
     playButton.setBounds(topControls.removeFromLeft(80).reduced(padding, 0));
@@ -242,58 +252,124 @@ void MainComponent::timerCallback()
 
 void MainComponent::loadMidiFile()
 {
+    DBG("Starting loadMidiFile()");
     auto fileChooserFlags =
         juce::FileBrowserComponent::openMode |
         juce::FileBrowserComponent::canSelectFiles;
     
-    auto chooser = std::make_shared<juce::FileChooser>(
+    DBG("Creating FileChooser...");
+    fileChooser = std::make_unique<juce::FileChooser>(
         "Select a MIDI file",
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         "*.mid;*.midi");
         
-    chooser->launchAsync(fileChooserFlags,
-        [this, chooser](const juce::FileChooser& fc)
+    auto weakThis = juce::Component::SafePointer<MainComponent>(this);
+    DBG("Launching async file chooser...");
+    
+    fileChooser->launchAsync(fileChooserFlags,
+        [weakThis](const juce::FileChooser& fc)
         {
-            auto result = fc.getResult();
-            std::unique_ptr<juce::InputStream> stream;
-            
-            #if JUCE_ANDROID
-            juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
-            stream = fc.getURLResult().createInputStream(options);
-            #else
-            if (result.exists()) {
-                stream = std::make_unique<juce::FileInputStream>(result);
-            }
-            #endif
-            
-            if (stream != nullptr)
+            DBG("FileChooser callback started");
+            if (auto* comp = weakThis.getComponent())
             {
-                DBG("Stream opened successfully");
-                if (midiFile.readFrom(*stream))
+                DBG("Component is valid");
+                auto result = fc.getResult();
+                DBG("Got file result: " + result.getFullPathName());
+                
+                std::unique_ptr<juce::InputStream> stream;
+                
+                #if JUCE_ANDROID
+                DBG("Creating Android stream...");
+                juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
+                stream = fc.getURLResult().createInputStream(options);
+                #else
+                if (result.exists()) {
+                    DBG("Creating file input stream...");
+                    stream = std::make_unique<juce::FileInputStream>(result);
+                    if (stream != nullptr) {
+                        DBG("Stream created successfully, size: " + juce::String(stream->getTotalLength()));
+                    } else {
+                        DBG("Failed to create stream!");
+                    }
+                } else {
+                    DBG("File does not exist: " + result.getFullPathName());
+                }
+                #endif
+                
+                if (stream != nullptr)
                 {
-                    DBG("MIDI file read successfully");
-                    if (midiFile.getNumTracks() > 0)
+                    DBG("Stream opened successfully");
+                    
+                    // Store the current number of tracks before reading
+                    const int prevNumTracks = comp->midiFile.getNumTracks();
+                    DBG("Previous number of tracks: " + juce::String(prevNumTracks));
+                    
+                    if (comp->midiFile.readFrom(*stream))
                     {
-                        midiSequence = *midiFile.getTrack(0);
+                        DBG("MIDI file read successfully");
+                        const int newNumTracks = comp->midiFile.getNumTracks();
+                        DBG("New number of tracks: " + juce::String(newNumTracks));
                         
-                        for (int i = 1; i < midiFile.getNumTracks(); ++i)
+                        if (newNumTracks > 0)
                         {
-                            midiSequence.addSequence(*midiFile.getTrack(i),
-                                                   0.0, 0.0,
-                                                   midiFile.getLastTimestamp());
+                            try {
+                                DBG("Getting first track...");
+                                comp->midiSequence = *comp->midiFile.getTrack(0);
+                                DBG("First track copied, events: " + juce::String(comp->midiSequence.getNumEvents()));
+                                
+                                for (int i = 1; i < newNumTracks; ++i)
+                                {
+                                    DBG("Adding track " + juce::String(i));
+                                    comp->midiSequence.addSequence(*comp->midiFile.getTrack(i),
+                                                           0.0, 0.0,
+                                                           comp->midiFile.getLastTimestamp());
+                                    DBG("Track " + juce::String(i) + " added, total events now: " + 
+                                        juce::String(comp->midiSequence.getNumEvents()));
+                                }
+                                
+                                DBG("Updating matched pairs...");
+                                comp->midiSequence.updateMatchedPairs();
+                                
+                                DBG("Setting sequence in piano roll...");
+                                comp->pianoRoll.setMidiSequence(comp->midiSequence);
+                                
+                                DBG("Updating UI state...");
+                                comp->playButton.setEnabled(true);
+                                comp->stopButton.setEnabled(false);
+                                comp->currentEvent = 0;
+                                comp->playbackPosition = 0.0;
+                                comp->lastTime = juce::Time::getMillisecondCounterHiRes();
+                                DBG("MIDI file loading completed successfully");
+                            }
+                            catch (const std::exception& e) {
+                                DBG("Exception during MIDI processing: " + juce::String(e.what()));
+                            }
+                            catch (...) {
+                                DBG("Unknown exception during MIDI processing");
+                            }
                         }
-                        
-                        midiSequence.updateMatchedPairs();
-                        pianoRoll.setMidiSequence(midiSequence);
-                        playButton.setEnabled(true);
-                        stopButton.setEnabled(false);
-                        currentEvent = 0;
-                        playbackPosition = 0.0;
-                        lastTime = juce::Time::getMillisecondCounterHiRes();
+                        else {
+                            DBG("No tracks found in MIDI file");
+                        }
+                    }
+                    else {
+                        DBG("Failed to read MIDI file");
                     }
                 }
+                else {
+                    DBG("Stream is null");
+                }
+                
+                DBG("Clearing file chooser...");
+                comp->fileChooser = nullptr;
+                DBG("File chooser cleared");
             }
+            else {
+                DBG("Component is no longer valid");
+            }
+            DBG("FileChooser callback completed");
         });
+    DBG("loadMidiFile() setup completed");
 }
 
 void MainComponent::playMidiFile()

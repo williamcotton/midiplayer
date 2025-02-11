@@ -68,6 +68,9 @@ private:
         return (beats * 60.0 / tempo) * 1000.0;
     }
 
+    // File chooser
+    std::unique_ptr<juce::FileChooser> fileChooser;
+
     // Audio setup
     juce::AudioDeviceManager audioDeviceManager;
     juce::AudioSourcePlayer audioSourcePlayer;
