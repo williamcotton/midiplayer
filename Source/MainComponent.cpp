@@ -263,110 +263,150 @@ void MainComponent::loadMidiFile()
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         "*.mid;*.midi");
         
-    auto weakThis = juce::Component::SafePointer<MainComponent>(this);
+    // Create a safe pointer for this MainComponent
+    juce::Component::SafePointer<MainComponent> safeThis(this);
     DBG("Launching async file chooser...");
     
     fileChooser->launchAsync(fileChooserFlags,
-        [weakThis](const juce::FileChooser& fc)
+        [safeThis](const juce::FileChooser& fc)
         {
             DBG("FileChooser callback started");
-            if (auto* comp = weakThis.getComponent())
+            
+            // Always check if safeThis is still valid before proceeding
+            if (safeThis == nullptr)
             {
-                DBG("Component is valid");
-                auto result = fc.getResult();
-                DBG("Got file result: " + result.getFullPathName());
-                
-                std::unique_ptr<juce::InputStream> stream;
-                
-                #if JUCE_ANDROID
-                DBG("Creating Android stream...");
-                juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
-                stream = fc.getURLResult().createInputStream(options);
-                #else
-                if (result.exists()) {
-                    DBG("Creating file input stream...");
-                    stream = std::make_unique<juce::FileInputStream>(result);
-                    if (stream != nullptr) {
-                        DBG("Stream created successfully, size: " + juce::String(stream->getTotalLength()));
-                    } else {
-                        DBG("Failed to create stream!");
-                    }
+                DBG("Component is no longer valid - aborting callback");
+                return;
+            }
+            
+            DBG("Component is valid");
+            auto result = fc.getResult();
+            DBG("Got file result: " + result.getFullPathName());
+            
+            std::unique_ptr<juce::InputStream> stream;
+            
+            #if JUCE_ANDROID
+            DBG("Creating Android stream...");
+            juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
+            stream = fc.getURLResult().createInputStream(options);
+            #else
+            if (result.exists()) {
+                DBG("Creating file input stream...");
+                stream = std::make_unique<juce::FileInputStream>(result);
+                if (stream != nullptr) {
+                    DBG("Stream created successfully, size: " + juce::String(stream->getTotalLength()));
                 } else {
-                    DBG("File does not exist: " + result.getFullPathName());
+                    DBG("Failed to create stream!");
                 }
-                #endif
+            } else {
+                DBG("File does not exist: " + result.getFullPathName());
+            }
+            #endif
+            
+            // Check component validity again before proceeding with stream processing
+            if (safeThis == nullptr)
+            {
+                DBG("Component became invalid during stream creation - aborting");
+                return;
+            }
+            
+            if (stream != nullptr)
+            {
+                DBG("Stream opened successfully");
                 
-                if (stream != nullptr)
+                // Store the current number of tracks before reading
+                const int prevNumTracks = safeThis->midiFile.getNumTracks();
+                DBG("Previous number of tracks: " + juce::String(prevNumTracks));
+                
+                if (safeThis->midiFile.readFrom(*stream))
                 {
-                    DBG("Stream opened successfully");
-                    
-                    // Store the current number of tracks before reading
-                    const int prevNumTracks = comp->midiFile.getNumTracks();
-                    DBG("Previous number of tracks: " + juce::String(prevNumTracks));
-                    
-                    if (comp->midiFile.readFrom(*stream))
+                    // Check component validity after potentially long file read
+                    if (safeThis == nullptr)
                     {
-                        DBG("MIDI file read successfully");
-                        const int newNumTracks = comp->midiFile.getNumTracks();
-                        DBG("New number of tracks: " + juce::String(newNumTracks));
-                        
-                        if (newNumTracks > 0)
-                        {
-                            try {
-                                DBG("Getting first track...");
-                                comp->midiSequence = *comp->midiFile.getTrack(0);
-                                DBG("First track copied, events: " + juce::String(comp->midiSequence.getNumEvents()));
-                                
-                                for (int i = 1; i < newNumTracks; ++i)
+                        DBG("Component became invalid during MIDI file read - aborting");
+                        return;
+                    }
+                    
+                    DBG("MIDI file read successfully");
+                    const int newNumTracks = safeThis->midiFile.getNumTracks();
+                    DBG("New number of tracks: " + juce::String(newNumTracks));
+                    
+                    if (newNumTracks > 0)
+                    {
+                        try {
+                            DBG("Getting first track...");
+                            safeThis->midiSequence = *safeThis->midiFile.getTrack(0);
+                            DBG("First track copied, events: " + juce::String(safeThis->midiSequence.getNumEvents()));
+                            
+                            for (int i = 1; i < newNumTracks; ++i)
+                            {
+                                // Check validity in the loop as it might take time
+                                if (safeThis == nullptr)
                                 {
-                                    DBG("Adding track " + juce::String(i));
-                                    comp->midiSequence.addSequence(*comp->midiFile.getTrack(i),
-                                                           0.0, 0.0,
-                                                           comp->midiFile.getLastTimestamp());
-                                    DBG("Track " + juce::String(i) + " added, total events now: " + 
-                                        juce::String(comp->midiSequence.getNumEvents()));
+                                    DBG("Component became invalid during track processing - aborting");
+                                    return;
                                 }
                                 
-                                DBG("Updating matched pairs...");
-                                comp->midiSequence.updateMatchedPairs();
-                                
-                                DBG("Setting sequence in piano roll...");
-                                comp->pianoRoll.setMidiSequence(comp->midiSequence);
-                                
-                                DBG("Updating UI state...");
-                                comp->playButton.setEnabled(true);
-                                comp->stopButton.setEnabled(false);
-                                comp->currentEvent = 0;
-                                comp->playbackPosition = 0.0;
-                                comp->lastTime = juce::Time::getMillisecondCounterHiRes();
-                                DBG("MIDI file loading completed successfully");
+                                DBG("Adding track " + juce::String(i));
+                                safeThis->midiSequence.addSequence(*safeThis->midiFile.getTrack(i),
+                                                       0.0, 0.0,
+                                                       safeThis->midiFile.getLastTimestamp());
+                                DBG("Track " + juce::String(i) + " added, total events now: " + 
+                                    juce::String(safeThis->midiSequence.getNumEvents()));
                             }
-                            catch (const std::exception& e) {
-                                DBG("Exception during MIDI processing: " + juce::String(e.what()));
+                            
+                            // Final validity check before UI updates
+                            if (safeThis == nullptr)
+                            {
+                                DBG("Component became invalid before UI updates - aborting");
+                                return;
                             }
-                            catch (...) {
-                                DBG("Unknown exception during MIDI processing");
-                            }
+                            
+                            DBG("Updating matched pairs...");
+                            safeThis->midiSequence.updateMatchedPairs();
+                            
+                            DBG("Setting sequence in piano roll...");
+                            safeThis->pianoRoll.setMidiSequence(safeThis->midiSequence);
+                            
+                            DBG("Updating UI state...");
+                            safeThis->playButton.setEnabled(true);
+                            safeThis->stopButton.setEnabled(false);
+                            safeThis->currentEvent = 0;
+                            safeThis->playbackPosition = 0.0;
+                            safeThis->lastTime = juce::Time::getMillisecondCounterHiRes();
+                            DBG("MIDI file loading completed successfully");
                         }
-                        else {
-                            DBG("No tracks found in MIDI file");
+                        catch (const std::exception& e) {
+                            DBG("Exception during MIDI processing: " + juce::String(e.what()));
+                        }
+                        catch (...) {
+                            DBG("Unknown exception during MIDI processing");
                         }
                     }
                     else {
-                        DBG("Failed to read MIDI file");
+                        DBG("No tracks found in MIDI file");
                     }
                 }
                 else {
-                    DBG("Stream is null");
+                    DBG("Failed to read MIDI file");
                 }
-                
-                DBG("Clearing file chooser...");
-                comp->fileChooser = nullptr;
-                DBG("File chooser cleared");
             }
             else {
-                DBG("Component is no longer valid");
+                DBG("Stream is null");
             }
+            
+            // Final cleanup - check if component is still valid
+            if (safeThis != nullptr)
+            {
+                DBG("Clearing file chooser...");
+                safeThis->fileChooser = nullptr;
+                DBG("File chooser cleared");
+            }
+            else
+            {
+                DBG("Component invalid during cleanup - skipping file chooser clear");
+            }
+            
             DBG("FileChooser callback completed");
         });
     DBG("loadMidiFile() setup completed");
