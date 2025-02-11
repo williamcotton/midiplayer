@@ -42,7 +42,7 @@ MainComponent::MainComponent()
     };
     
     setSize(800, 600);
-    startTimer(50);
+    startTimer(5);
 
     auto result = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
     if (result.isNotEmpty())
@@ -110,12 +110,201 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     synth.setCurrentPlaybackSampleRate(sampleRate);
 }
 
+int MainComponent::findEventIndexForBeat(double beat) 
+{
+    int low = 0;
+    int high = midiSequence.getNumEvents();
+    while (low < high) {
+        int mid = (low + high) / 2;
+        double eventBeat = convertTicksToBeats(
+            midiSequence.getEventPointer(mid)->message.getTimeStamp());
+        if (eventBeat < beat)
+        low = mid + 1;
+        else
+        high = mid;
+    }
+    return low;
+}
+
+void MainComponent::processSegment(const juce::AudioSourceChannelInfo& bufferInfo,
+                                   int segmentStartSample,
+                                   int segmentNumSamples,
+                                   double segmentStartBeat,
+                                   double segmentEndBeat)
+{
+    juce::MidiBuffer midiBuffer;
+    
+    auto* device = audioDeviceManager.getCurrentAudioDevice();
+    const double sampleRate = device->getCurrentSampleRate();
+    const double currentTempo = tempo; // local copy
+    const double secondsPerBeat = 60.0 / currentTempo;
+    
+    // Use binary search (or iterate over all events) to find the first event at or after segmentStartBeat.
+    int eventIndex = findEventIndexForBeat(segmentStartBeat);
+    
+    // Process events until an event’s beat exceeds segmentEndBeat.
+    while (eventIndex < midiSequence.getNumEvents())
+    {
+        double eventBeat = convertTicksToBeats(midiSequence.getEventPointer(eventIndex)->message.getTimeStamp());
+        if (eventBeat > segmentEndBeat)
+            break;
+        
+        // Compute the event's offset (in samples) relative to the segment.
+        int offset = segmentStartSample + (int)((eventBeat - segmentStartBeat) * secondsPerBeat * sampleRate);
+        // Use a strict ">" check so that an event exactly at the boundary is processed.
+        if (offset > segmentStartSample + segmentNumSamples)
+            break;
+        
+        midiBuffer.addEvent(midiSequence.getEventPointer(eventIndex)->message, offset - segmentStartSample);
+        ++eventIndex;
+    }
+    
+    juce::AudioSourceChannelInfo segmentBuffer;
+    segmentBuffer.buffer = bufferInfo.buffer;
+    segmentBuffer.startSample = bufferInfo.startSample + segmentStartSample;
+    segmentBuffer.numSamples = segmentNumSamples;
+    
+    synth.renderNextBlock(*segmentBuffer.buffer, midiBuffer, segmentBuffer.startSample, segmentBuffer.numSamples);
+}
+
+
+void MainComponent::reTriggerSustainedNotesAt(double boundaryBeat)
+{
+    // Define a small tolerance (in beats) to catch events that are just after the boundary.
+    const double epsilon = 0.05;  // Adjust as needed
+    
+    // Iterate over all MIDI events.
+    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+    {
+        auto* evt = midiSequence.getEventPointer(i);
+        if (evt->message.isNoteOn() && evt->noteOffObject != nullptr)
+        {
+            double noteOnBeat = convertTicksToBeats(evt->message.getTimeStamp());
+            double noteOffBeat = convertTicksToBeats(evt->noteOffObject->message.getTimeStamp());
+            
+            // Allow a small tolerance on the noteOnBeat check.
+            if (noteOnBeat <= (boundaryBeat + epsilon) && noteOffBeat > boundaryBeat)
+            {
+                synth.noteOn(evt->message.getChannel(),
+                             evt->message.getNoteNumber(),
+                             evt->message.getVelocity() / 127.0f);
+            }
+        }
+    }
+}
+
+
 void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
 {
     bufferToFill.clearActiveBufferRegion();
-    synth.renderNextBlock(*bufferToFill.buffer, juce::MidiBuffer(),
-                         bufferToFill.startSample, bufferToFill.numSamples);
+
+    // If looping is enabled and the current playback position is beyond the loop's end,
+    // reset it to the loop start. This avoids processing negative durations.
+    if (isLooping && (playbackPosition.load() > loopEndBeat))
+    {
+        playbackPosition.store(loopStartBeat);
+    }
+
+    if (!isPlaying)
+        return;
+    
+    auto* device = audioDeviceManager.getCurrentAudioDevice();
+    if (device == nullptr)
+        return;
+    
+    const double sampleRate = device->getCurrentSampleRate();
+    const int numSamples = bufferToFill.numSamples;
+    
+    // Get a local copy of tempo and compute seconds per beat.
+    const double currentTempo = tempo; // in BPM
+    const double secondsPerBeat = 60.0 / currentTempo;
+    
+    // Calculate how many beats this block covers.
+    const double blockBeats = (numSamples / sampleRate) / secondsPerBeat;
+    
+    // Read the current playback position (in beats).
+    double currentBeat = playbackPosition.load();
+    
+    // Compute the “file end” as one beat after the last event’s beat.
+    double lastEventBeat = 0.0;
+    if (midiSequence.getNumEvents() > 0)
+    {
+        auto* lastEvent = midiSequence.getEventPointer(midiSequence.getNumEvents() - 1);
+        lastEventBeat = convertTicksToBeats(lastEvent->message.getTimeStamp());
+    }
+    const double fileEndBeat = lastEventBeat + 1.0;
+    
+    // --- Non-looping case: if we are not in loop mode, check for end-of-file.
+    if (!isLooping && (currentBeat + blockBeats) >= fileEndBeat)
+    {
+        double beatsToEnd = fileEndBeat - currentBeat;
+        int samplesToEnd = juce::jmin(numSamples, (int)(beatsToEnd * secondsPerBeat * sampleRate));
+        
+        processSegment(bufferToFill, 0, samplesToEnd, currentBeat, fileEndBeat);
+        playbackPosition.store(fileEndBeat);
+        
+        isPlaying = false;
+        synth.allNotesOff(0, true);
+        juce::MessageManager::callAsync([this]() {
+            playButton.setEnabled(true);
+            stopButton.setEnabled(false);
+        });
+        
+        return;
+    }
+    
+    // --- Looping case: if we are looping and this block crosses loopEndBeat.
+    if (isLooping && (currentBeat + blockBeats) >= loopEndBeat)
+    {
+        // Process from currentBeat up to loopEndBeat.
+        const double beatsToLoopEnd = loopEndBeat - currentBeat;
+        const int samplesToLoopEnd = juce::jmin(numSamples, (int)(beatsToLoopEnd * secondsPerBeat * sampleRate));
+        processSegment(bufferToFill, 0, samplesToLoopEnd, currentBeat, loopEndBeat);
+        
+        int remainingSamples = numSamples - samplesToLoopEnd;
+        
+        if (currentLoopIteration < loopCount - 1)
+        {
+            // For non-final iterations, clear active voices, re-trigger sustained notes at loopStartBeat,
+            // then process the remainder of the block as if starting at loopStartBeat.
+            synth.allNotesOff(0, true);
+            reTriggerSustainedNotesAt(loopStartBeat);
+            
+            const double newSegmentStartBeat = loopStartBeat;
+            const double newSegmentEndBeat = newSegmentStartBeat + (remainingSamples / sampleRate) / secondsPerBeat;
+            processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, newSegmentStartBeat, newSegmentEndBeat);
+            playbackPosition.store(newSegmentEndBeat);
+            
+            currentLoopIteration++;            
+        }
+        else
+        {
+            // FINAL loop iteration:
+            // Process the remainder of the block normally from loopEndBeat onward.
+            const double extraBeats = (remainingSamples / sampleRate) / secondsPerBeat;
+            double newBeatPosition = loopEndBeat + extraBeats;
+            processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, loopEndBeat, newBeatPosition);
+            playbackPosition.store(newBeatPosition);
+            
+            // Turn off looping so that subsequent blocks process events normally.
+            isLooping = false;
+            
+            // Reset the loop counter so that the loop region remains active for subsequent playbacks.
+            currentLoopIteration = 0;
+            
+            // Clear lingering voices and re-trigger sustained notes based on the loop end.
+            synth.allNotesOff(0, true);
+            reTriggerSustainedNotesAt(loopEndBeat);
+        }
+        
+        return;
+    }
+    // --- Default (non-crossing) case: process the entire block normally.
+    processSegment(bufferToFill, 0, numSamples, currentBeat, currentBeat + blockBeats);
+    playbackPosition.store(currentBeat + blockBeats);
 }
+
+
 
 void MainComponent::releaseResources()
 {
@@ -126,128 +315,10 @@ bool MainComponent::isPositionInLoop(double beat) const
     return isLooping && beat >= loopStartBeat && beat < loopEndBeat;
 }
 
-void MainComponent::timerCallback()
-{
-    if (isPlaying)
-    {
-        auto currentTime = juce::Time::getMillisecondCounterHiRes();
-        auto deltaTimeMs = currentTime - lastTime;
-        auto deltaBeats = convertMillisecondsToBeats(deltaTimeMs);
-        
-        // Update position in beats
-        auto newPosition = playbackPosition + deltaBeats;
-        
-        // Check for looping first
-        if (isPositionInLoop(playbackPosition))
-        {
-            if ((currentLoopIteration + 1) < loopCount) // loopCount
-            {
-                if (newPosition >= loopEndBeat) // loopEndBeat
-                {
-                    // Turn off all currently playing notes before loop
-                    synth.allNotesOff(0, true);
-                    
-                    newPosition = loopStartBeat; // loopStartBeat
-                    double loopStartTicks = convertBeatsToTicks(newPosition);
-                    
-                    // Find the first event that's at or after our loop start point
-                    currentEvent = 0;
-                    while (currentEvent < midiSequence.getNumEvents())
-                    {
-                        auto eventTime = midiSequence.getEventPointer(currentEvent)->message.getTimeStamp();
-                        if (eventTime >= loopStartTicks)
-                            break;
-                        currentEvent++;
-                    }
-                    
-                    // Step back one event to catch any notes that might start exactly at the loop point
-                    if (currentEvent > 0)
-                        currentEvent--;
-                        
-                    // Scan for notes that should be playing at loop start
-                    for (int i = 0; i < currentEvent; ++i)
-                    {
-                        auto* event = midiSequence.getEventPointer(i);
-                        if (event->message.isNoteOn())
-                        {
-                            auto noteOff = event->noteOffObject;
-                            if (noteOff != nullptr)
-                            {
-                                auto noteOnTime = convertTicksToBeats(event->message.getTimeStamp());
-                                auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
-                                
-                                if (noteOnTime <= newPosition && noteOffTime > newPosition)
-                                {
-                                    synth.noteOn(event->message.getChannel(),
-                                               event->message.getNoteNumber(),
-                                               event->message.getVelocity() / 127.0f);
-                                }
-                            }
-                        }
-                    }
-                    
-                    currentLoopIteration++;
-                }
-            }
-        }
-        // Only check for sequence end if we're not looping
-        else
-        {
-            // Find the last event timestamp in ticks
-            double lastEventTime = 0.0;
-            for (int i = 0; i < midiSequence.getNumEvents(); ++i)
-            {
-                lastEventTime = std::max(lastEventTime, midiSequence.getEventPointer(i)->message.getTimeStamp());
-            }
-            double lastEventBeat = convertTicksToBeats(lastEventTime);
-            
-            // If we've reached the end of the sequence and we're not looping
-            if (newPosition >= lastEventBeat + 1.0)
-            {
-                stopMidiFile();
-                return;
-            }
-        }
-        
-        // Process MIDI events
-        while (currentEvent < midiSequence.getNumEvents())
-        {
-            auto eventTime = convertTicksToBeats(
-                midiSequence.getEventPointer(currentEvent)->message.getTimeStamp());
-                
-            if (eventTime <= newPosition)
-            {
-                auto& midimsg = midiSequence.getEventPointer(currentEvent)->message;
-                
-                if (midimsg.isNoteOn())
-                {
-                    synth.noteOn(midimsg.getChannel(),
-                               midimsg.getNoteNumber(),
-                               midimsg.getVelocity() / 127.0f);
-                }
-                else if (midimsg.isNoteOff())
-                {
-                    synth.noteOff(midimsg.getChannel(),
-                                midimsg.getNoteNumber(),
-                                midimsg.getVelocity() / 127.0f,
-                                true);
-                }
-                
-                currentEvent++;
-            }
-            else
-            {
-                break;
-            }
-        }
-        
-        // Update position for next callback
-        playbackPosition = newPosition;
-        lastTime = currentTime;
-        
-        // Update piano roll display
-        pianoRoll.setPlaybackPosition(playbackPosition);
-    }
+void MainComponent::timerCallback() {
+  // Simply update the piano roll's playhead using the current playback
+  // position.
+  pianoRoll.setPlaybackPosition(playbackPosition.load());
 }
 
 void MainComponent::loadMidiFile()
@@ -414,67 +485,37 @@ void MainComponent::loadMidiFile()
 
 void MainComponent::playMidiFile()
 {
-    if (currentEvent < midiSequence.getNumEvents())
+    if (midiSequence.getNumEvents() > 0)
     {
         isPlaying = true;
-        lastTime = juce::Time::getMillisecondCounterHiRes();
+        playbackPosition.store(0.0);
+        currentLoopIteration = 0;
+        isLooping = true;
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
-        
-        // Reset loop iteration counter when starting playback
-        currentLoopIteration = 0;
-        
-        // If we're starting from a position within the loop region,
-        // make sure we process any notes that should be playing
-        if (isPositionInLoop(playbackPosition))
-        {
-            // double loopStartTicks  = convertBeatsToTicks(playbackPosition);
-            
-            // Find notes that should be playing at this position
-            for (int i = 0; i < currentEvent; ++i)
-            {
-                auto* event = midiSequence.getEventPointer(i);
-                auto eventTime = convertTicksToBeats(event->message.getTimeStamp());
-                
-                if (event->message.isNoteOn())
-                {
-                    auto noteOff = event->noteOffObject;
-                    if (noteOff != nullptr)
-                    {
-                        auto noteOffTime = convertTicksToBeats(noteOff->message.getTimeStamp());
-                        if (eventTime <= playbackPosition && noteOffTime > playbackPosition)
-                        {
-                            synth.noteOn(event->message.getChannel(),
-                                       event->message.getNoteNumber(),
-                                       event->message.getVelocity() / 127.0f);
-                        }
-                    }
-                }
-            }
-        }
+        // Audio scheduling will begin from beat 0.
     }
 }
 
 void MainComponent::stopMidiFile()
 {
     isPlaying = false;
-    // Turn off all notes with a proper release
     synth.allNotesOff(0, true);
-    // Also explicitly turn off all notes to be extra safe
     for (int channel = 1; channel <= 16; ++channel)
     {
         for (int note = 0; note < 128; ++note)
-        {
             synth.noteOff(channel, note, 0.0f, true);
-        }
     }
     
-    currentEvent = 0;
-    playbackPosition = 0.0;
-    currentLoopIteration = 0;  // Reset loop iteration counter when stopping
+    playbackPosition.store(0.0);
+    currentLoopIteration = 0;  // Reset the loop counter for the next playback
+    
+    // Do not set isLooping to false if you want the loop region to persist.
+    
     playButton.setEnabled(true);
     stopButton.setEnabled(false);
 }
+
 
 void MainComponent::setupLoopRegion()
 {
@@ -486,7 +527,7 @@ void MainComponent::setupLoopRegion()
     dialogWindow->addTextEditor("startBeat", "0", "Start Beat:");
     dialogWindow->addTextEditor("endBeat", "4", "End Beat:");
     dialogWindow->addTextEditor("loopCount", "2", "Number of Loops:");
-    
+
     dialogWindow->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
     dialogWindow->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
 
@@ -494,23 +535,35 @@ void MainComponent::setupLoopRegion()
         juce::ModalCallbackFunction::create(
             [this, dialogWindow = std::move(dialogWindow)](int result) mutable
             {
-                if (result == 1)  // "OK" was pressed
+                if (result == 1)  // "OK" pressed
                 {
                     double startBeat = dialogWindow->getTextEditorContents("startBeat").getDoubleValue();
                     double endBeat = dialogWindow->getTextEditorContents("endBeat").getDoubleValue();
                     int loops = dialogWindow->getTextEditorContents("loopCount").getIntValue();
                     
+                    // Update the piano roll display.
                     pianoRoll.setLoopRegion(startBeat, endBeat, loops);
 
+                    // Update internal loop parameters.
                     loopStartBeat = startBeat;
                     loopEndBeat = endBeat;
                     loopCount = loops;
                     isLooping = (loopCount > 0);
                     currentLoopIteration = 0;
+
+                    // Stop the playback
+                    stopMidiFile();
+                    
+                    // If the current playback position is beyond the new loop's end, reset it.
+                    double currentPos = playbackPosition.load();
+                    if (currentPos > loopEndBeat)
+                        playbackPosition.store(loopStartBeat);
                 }
             }
         ));
-    }
+}
+
+
 
 void MainComponent::clearLoopRegion()
 {

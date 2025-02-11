@@ -111,7 +111,7 @@ public:
 
     void startPlayback()
     {
-        startTimerHz(30); // Update 30 times per second
+        startTimerHz(120);
     }
 
     void stopPlayback()

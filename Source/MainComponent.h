@@ -46,11 +46,17 @@ private:
     void setupLoopRegion();
     void clearLoopRegion();
     int findEventAtTime(double timeStamp);
-    double convertTicksToBeats(double ticks) const
-    {
-        return ticks / 480.0; // assuming standard MIDI PPQ
+    int findEventIndexForBeat(double beat);
+    void processSegment(
+        const juce::AudioSourceChannelInfo &bufferInfo, int segmentStartSample,
+        int segmentNumSamples, double segmentStartBeat,
+        double segmentEndBeat);
+    void reTriggerSustainedNotesAt(double loopStartBeat);
+
+    double convertTicksToBeats(double ticks) const {
+      return ticks / 480.0; // assuming standard MIDI PPQ
     }
-    
+
     double convertBeatsToTicks(double beats) const
     {
         return beats * 480.0;
@@ -184,7 +190,7 @@ private:
     // Playback state
     bool isPlaying = false;
     int currentEvent = 0;
-    double playbackPosition = 0.0;
+    std::atomic<double> playbackPosition{0.0};
     double lastTime = 0.0;
     int currentLoopIteration = 0;
     double tempo = 120.0; // BPM
@@ -194,6 +200,7 @@ private:
     double loopEndBeat;
     int loopCount;
     bool isLooping;
+    
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
