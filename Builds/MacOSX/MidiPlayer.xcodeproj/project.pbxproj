@@ -11,6 +11,7 @@
 		0B9F4FD2213376F91ADCC80D /* CoreAudio.framework */ = {isa = PBXBuildFile; fileRef = 10E6174D619336D5A0E18D07; };
 		0DA531305098A0EEF86C2E0E /* MetalKit.framework */ = {isa = PBXBuildFile; fileRef = 5C090A80AB89F3B2C19183E7; settings = { ATTRIBUTES = (Weak, ); }; };
 		10164D8B77261C7EBE9D3059 /* include_juce_events.mm */ = {isa = PBXBuildFile; fileRef = 27F4AD713E054813455A5E42; };
+		122CC95F28DB9AE9C0F19D7F /* BinaryData.cpp */ = {isa = PBXBuildFile; fileRef = A16EDB6F90765B3FC87CB4B3; };
 		17B74ABEF4663C5E20CB2CE9 /* MainComponent.cpp */ = {isa = PBXBuildFile; fileRef = BB4FABDF34FDC0224F4DAE21; };
 		1D2FBB678580E2CBA71A13E4 /* Security.framework */ = {isa = PBXBuildFile; fileRef = 65D6063BB8CD14A58A82217B; };
 		21DCCABEE7923481A1C823B3 /* include_juce_audio_utils.mm */ = {isa = PBXBuildFile; fileRef = CE67DE18DCE1CC3B664B2AF1; };
@@ -45,6 +46,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0186AD250E13A911BBAF08FB /* BinaryData.h */ /* BinaryData.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = BinaryData.h; path = ../../JuceLibraryCode/BinaryData.h; sourceTree = SOURCE_ROOT; };
 		083300236F9AEDACBDD0B604 /* include_juce_core.mm */ /* include_juce_core.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_core.mm; path = ../../JuceLibraryCode/include_juce_core.mm; sourceTree = SOURCE_ROOT; };
 		101376FD3B7F128FDA125971 /* juce_core */ /* juce_core */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_core; path = "~/JUCE/modules/juce_core"; sourceTree = "<absolute>"; };
 		10E6174D619336D5A0E18D07 /* CoreAudio.framework */ /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
@@ -55,6 +57,7 @@
 		368AFCF9E529EB75249E1028 /* include_juce_graphics_Sheenbidi.c */ /* include_juce_graphics_Sheenbidi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = include_juce_graphics_Sheenbidi.c; path = ../../JuceLibraryCode/include_juce_graphics_Sheenbidi.c; sourceTree = SOURCE_ROOT; };
 		36C3FF5DFB1F9C72C9B2A019 /* include_juce_graphics_Harfbuzz.cpp */ /* include_juce_graphics_Harfbuzz.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_graphics_Harfbuzz.cpp; path = ../../JuceLibraryCode/include_juce_graphics_Harfbuzz.cpp; sourceTree = SOURCE_ROOT; };
 		36E6D3EB4E94D8C4E0CF0851 /* include_juce_audio_processors_ara.cpp */ /* include_juce_audio_processors_ara.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_audio_processors_ara.cpp; path = ../../JuceLibraryCode/include_juce_audio_processors_ara.cpp; sourceTree = SOURCE_ROOT; };
+		370CE15CF722DDA573E36D36 /* Korg_Triton_Piano.sf2 */ /* Korg_Triton_Piano.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file.sf2; name = Korg_Triton_Piano.sf2; path = ../../SoundFonts/Korg_Triton_Piano.sf2; sourceTree = SOURCE_ROOT; };
 		389CA584A24658775C4D9909 /* include_juce_gui_basics.mm */ /* include_juce_gui_basics.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_gui_basics.mm; path = ../../JuceLibraryCode/include_juce_gui_basics.mm; sourceTree = SOURCE_ROOT; };
 		3E9343DC778801811CD9F992 /* juce_gui_basics */ /* juce_gui_basics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_gui_basics; path = "~/JUCE/modules/juce_gui_basics"; sourceTree = "<absolute>"; };
 		44CF54CAE386AB05AA2D44DA /* CoreAudioKit.framework */ /* CoreAudioKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioKit.framework; path = System/Library/Frameworks/CoreAudioKit.framework; sourceTree = SDKROOT; };
@@ -80,6 +83,7 @@
 		97E0BDDFBE91B3F0B5329E65 /* Accelerate.framework */ /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		9A62E3EA27687E5EF6246D50 /* WebKit.framework */ /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		9F3A2CFBFAA6B0C8ECC4BA60 /* juce_data_structures */ /* juce_data_structures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_data_structures; path = "~/JUCE/modules/juce_data_structures"; sourceTree = "<absolute>"; };
+		A16EDB6F90765B3FC87CB4B3 /* BinaryData.cpp */ /* BinaryData.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = BinaryData.cpp; path = ../../JuceLibraryCode/BinaryData.cpp; sourceTree = SOURCE_ROOT; };
 		A1DEA065E9AC78EA3195187C /* RecentFilesMenuTemplate.nib */ /* RecentFilesMenuTemplate.nib */ = {isa = PBXFileReference; lastKnownFileType = file.nib; name = RecentFilesMenuTemplate.nib; path = RecentFilesMenuTemplate.nib; sourceTree = SOURCE_ROOT; };
 		A5EEB13377F03AE9C609D2AB /* App */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MidiPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB4FABDF34FDC0224F4DAE21 /* MainComponent.cpp */ /* MainComponent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = MainComponent.cpp; path = ../../Source/MainComponent.cpp; sourceTree = SOURCE_ROOT; };
@@ -126,6 +130,8 @@
 		390048C87977932844A397EE /* JUCE Library Code */ = {
 			isa = PBXGroup;
 			children = (
+				A16EDB6F90765B3FC87CB4B3,
+				0186AD250E13A911BBAF08FB,
 				53A2F8A1F2708CB89B7C42EB,
 				EA1A038FB4FF39C76C29D882,
 				6D54AD72F6F6B13EDBDE80E3,
@@ -199,6 +205,7 @@
 		9ED4C96802D87D1CBBAB75E7 /* MidiPlayer */ = {
 			isa = PBXGroup;
 			children = (
+				C09AD5AC2B65574F806E238E,
 				B7683EA4C905CF75B2693D72,
 			);
 			name = MidiPlayer;
@@ -222,6 +229,14 @@
 				BB4FABDF34FDC0224F4DAE21,
 			);
 			name = Source;
+			sourceTree = "<group>";
+		};
+		C09AD5AC2B65574F806E238E /* SoundFonts */ = {
+			isa = PBXGroup;
+			children = (
+				370CE15CF722DDA573E36D36,
+			);
+			name = SoundFonts;
 			sourceTree = "<group>";
 		};
 		C4ABA4EEE212412C7C917EF0 /* Source */ = {
@@ -325,6 +340,7 @@
 			files = (
 				A39F8066C691671850C0DC20,
 				17B74ABEF4663C5E20CB2CE9,
+				122CC95F28DB9AE9C0F19D7F,
 				BABDBABC02B8B4DF54111D6E,
 				71420ED2E09BBCEE9AA4F82E,
 				2F2DE7180FA17AD1C57322AE,

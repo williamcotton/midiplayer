@@ -3,6 +3,10 @@
 <JUCERPROJECT id="WvJDmi" name="MidiPlayer" projectType="guiapp" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
   <MAINGROUP id="xCpQIz" name="MidiPlayer">
+    <GROUP id="{7ABC93FF-8C8B-9A9B-BF76-A9E2FFB083BE}" name="SoundFonts">
+      <FILE id="CcNUjl" name="Korg_Triton_Piano.sf2" compile="0" resource="1"
+            file="SoundFonts/Korg_Triton_Piano.sf2"/>
+    </GROUP>
     <GROUP id="{95E561C4-6E78-D90A-5347-EF77B013A7DB}" name="Source">
       <FILE id="aI6XUM" name="PianoRollComponent.h" compile="0" resource="0"
             file="Source/PianoRollComponent.h"/>

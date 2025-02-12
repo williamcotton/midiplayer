@@ -16,7 +16,7 @@ class Synth : public juce::Synthesiser
 {
 public:
   Synth();
-  virtual ~Synth() {}
+  virtual ~Synth() override {}
 
   void noteOn(int midiChannel, int midiNoteNumber, float velocity) override;
   void noteOff(int midiChannel, int midiNoteNumber, float velocity, bool allowTailOff) override;

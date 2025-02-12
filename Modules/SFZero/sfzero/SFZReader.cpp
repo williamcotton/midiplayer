@@ -490,7 +490,7 @@ const char *sfzero::Reader::readPathInto(juce::String *pathOut, const char *pIn,
   }
   else
   {
-    *pathOut = std::string();
+    *pathOut = {};
   }
   return p;
 }

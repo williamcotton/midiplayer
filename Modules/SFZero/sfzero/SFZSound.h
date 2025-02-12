@@ -18,7 +18,7 @@ class Sound : public juce::SynthesiserSound
 {
 public:
   explicit Sound(const juce::File &file);
-  virtual ~Sound();
+  virtual ~Sound() override;
 
   typedef juce::ReferenceCountedObjectPtr<Sound> Ptr;
 
@@ -26,7 +26,7 @@ public:
   bool appliesToChannel(int midiChannel) override;
 
   void addRegion(Region *region); // Takes ownership of the region.
-  Sample *addSample(juce::String path, juce::String defaultPath = std::string());
+  Sample *addSample(juce::String path, juce::String defaultPath = {});
   void addError(const juce::String &message);
   void addUnsupportedOpcode(const juce::String &opcode);
 

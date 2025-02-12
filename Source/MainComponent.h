@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include "PianoRollComponent.h"
+#include "../Modules/SFZero/SFZero.h"
+#include "../JuceLibraryCode/BinaryData.h"
 
 // Synthesizer voice
 class SineWaveSound : public juce::SynthesiserSound
@@ -200,6 +202,12 @@ private:
     double loopEndBeat;
     int loopCount;
     bool isLooping;
+
+    // Add SF2 synth components
+    sfzero::Synth sf2Synth;
+    bool useSF2Synth = true;  // Default to using SF2 synth
+    std::unique_ptr<sfzero::SF2Sound> sf2Sound;
+    juce::AudioFormatManager formatManager;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

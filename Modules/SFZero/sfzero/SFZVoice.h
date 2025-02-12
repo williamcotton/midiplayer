@@ -17,7 +17,7 @@ class Voice : public juce::SynthesiserVoice
 {
 public:
   Voice();
-  virtual ~Voice();
+  virtual ~Voice() override;
 
   bool canPlaySound(juce::SynthesiserSound *sound) override;
   void startNote(int midiNoteNumber, float velocity, juce::SynthesiserSound *sound, int currentPitchWheelPosition) override;

@@ -12,10 +12,10 @@
 
 sfzero::SF2Reader::SF2Reader(sfzero::SF2Sound *soundIn, const juce::File &fileIn) : sound_(soundIn)
 {
-  file_ = fileIn.createInputStream();
+  file_ = fileIn.createInputStream().release();
 }
 
-sfzero::SF2Reader::~SF2Reader() { file_.reset(); }
+sfzero::SF2Reader::~SF2Reader() { delete file_; }
 
 void sfzero::SF2Reader::read()
 {
@@ -29,17 +29,17 @@ void sfzero::SF2Reader::read()
   sfzero::SF2::Hydra hydra;
   file_->setPosition(0);
   sfzero::RIFFChunk riffChunk;
-  riffChunk.readFrom(file_.get());
+  riffChunk.readFrom(file_);
   while (file_->getPosition() < riffChunk.end())
   {
     sfzero::RIFFChunk chunk;
-    chunk.readFrom(file_.get());
+    chunk.readFrom(file_);
     if (FourCCEquals(chunk.id, "pdta"))
     {
-      hydra.readFrom(file_.get(), chunk.end());
+      hydra.readFrom(file_, chunk.end());
       break;
     }
-    chunk.seekAfter(file_.get());
+    chunk.seekAfter(file_);
   }
   if (!hydra.isComplete())
   {
@@ -190,30 +190,30 @@ juce::AudioSampleBuffer *sfzero::SF2Reader::readSamples(double *progressVar, juc
   // Find the "sdta" chunk.
   file_->setPosition(0);
   sfzero::RIFFChunk riffChunk;
-  riffChunk.readFrom(file_.get());
+  riffChunk.readFrom(file_);
   bool found = false;
   sfzero::RIFFChunk chunk;
   while (file_->getPosition() < riffChunk.end())
   {
-    chunk.readFrom(file_.get());
+    chunk.readFrom(file_);
     if (FourCCEquals(chunk.id, "sdta"))
     {
       found = true;
       break;
     }
-    chunk.seekAfter(file_.get());
+    chunk.seekAfter(file_);
   }
   juce::int64 sdtaEnd = chunk.end();
   found = false;
   while (file_->getPosition() < sdtaEnd)
   {
-    chunk.readFrom(file_.get());
+    chunk.readFrom(file_);
     if (FourCCEquals(chunk.id, "smpl"))
     {
       found = true;
       break;
     }
-    chunk.seekAfter(file_.get());
+    chunk.seekAfter(file_);
   }
   if (!found)
   {
@@ -222,7 +222,7 @@ juce::AudioSampleBuffer *sfzero::SF2Reader::readSamples(double *progressVar, juc
   }
 
   // Allocate the AudioSampleBuffer.
-  int numSamples = chunk.size / sizeof(short);
+  int numSamples = int (chunk.size / sizeof(short));
   juce::AudioSampleBuffer *sampleBuffer = new juce::AudioSampleBuffer(1, numSamples);
 
   // Read and convert.

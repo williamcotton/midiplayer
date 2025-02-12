@@ -37,6 +37,7 @@ add_library( ${BINARY_NAME}
 
     SHARED
 
+    "../../../SoundFonts/Korg_Triton_Piano.sf2"
     "../../../Source/PianoRollComponent.h"
     "../../../Source/MainComponent.h"
     "../../../Source/Main.cpp"
@@ -2319,6 +2320,8 @@ add_library( ${BINARY_NAME}
     "../../../Modules/SFZero/README.md"
     "../../../Modules/SFZero/SFZero.cpp"
     "../../../Modules/SFZero/SFZero.h"
+    "../../../JuceLibraryCode/BinaryData.cpp"
+    "../../../JuceLibraryCode/BinaryData.h"
     "../../../JuceLibraryCode/include_juce_audio_basics.cpp"
     "../../../JuceLibraryCode/include_juce_audio_devices.cpp"
     "../../../JuceLibraryCode/include_juce_audio_formats.cpp"
@@ -2340,6 +2343,7 @@ add_library( ${BINARY_NAME}
 )
 
 set_source_files_properties(
+    "../../../SoundFonts/Korg_Triton_Piano.sf2"
     "../../../Source/PianoRollComponent.h"
     "../../../Source/MainComponent.h"
     "../../../../../../../JUCE/modules/juce_audio_basics/audio_play_head/juce_AudioPlayHead.cpp"
@@ -4620,6 +4624,7 @@ set_source_files_properties(
     "../../../Modules/SFZero/README.md"
     "../../../Modules/SFZero/SFZero.cpp"
     "../../../Modules/SFZero/SFZero.h"
+    "../../../JuceLibraryCode/BinaryData.h"
     "../../../JuceLibraryCode/JuceHeader.h"
     PROPERTIES HEADER_FILE_ONLY TRUE)
 

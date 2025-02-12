@@ -1,15 +1,26 @@
-/*
-BEGIN_JUCE_MODULE_DECLARATION
-    ID:               SFZero
-    vendor:           altalogix
-    version:          2.0.2
-    name:             SFZero sfz player
-    description:      SFZero .szf/.sf2 soundfont player; forked from https://github.com/stevefolta/SFZero and converted to Juce module by Leo Olivers
-    website:          https://github.com/altalogix/SFZero
-    dependencies:     juce_gui_basics, juce_audio_basics, juce_audio_processors
-	license:          MIT
-END_JUCE_MODULE_DECLARATION 
-*/
+/*******************************************************************************
+ The block below describes the properties of this module, and is read by
+ the Projucer to automatically generate project code that uses it.
+ For details about the syntax and how to create or use a module, see the
+ JUCE Module Format.txt file.
+
+
+ BEGIN_JUCE_MODULE_DECLARATION
+
+  ID:                   SFZero
+  vendor:               altalogix
+  version:              2.0.2
+  name:                 SFZero
+  description:          SFZero .szf/.sf2 soundfont player; forked from https://github.com/stevefolta/SFZero and converted to Juce module by Leo Olivers
+  website:              https://github.com/altalogix/SFZero
+  license:              MIT
+  minimumCppStandard:   17
+
+  dependencies:         juce_gui_basics juce_audio_basics juce_audio_processors
+
+ END_JUCE_MODULE_DECLARATION
+
+*******************************************************************************/
 
 #ifndef INCLUDED_SFZERO_H
 #define INCLUDED_SFZERO_H

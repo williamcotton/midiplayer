@@ -6,12 +6,98 @@ MainComponent::MainComponent()
     setWantsKeyboardFocus(true);
     addKeyListener(this);
     
-    addAndMakeVisible(loadButton);
-    addAndMakeVisible(playButton);
-    addAndMakeVisible(stopButton);
-    addAndMakeVisible(pianoRoll);
-    addAndMakeVisible(setLoopButton);
-    addAndMakeVisible(clearLoopButton);
+    DBG("Initializing audio device manager...");
+    
+    // Initialize audio device manager with default device
+    auto error = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
+    if (error.isNotEmpty())
+    {
+        DBG("Error initializing with default devices: " + error);
+        
+        // If default initialization fails, try with specific settings
+        auto setup = audioDeviceManager.getAudioDeviceSetup();
+        setup.outputChannels = 2;
+        setup.useDefaultOutputChannels = true;
+        setup.bufferSize = 1024;  // Larger buffer size for stability
+        setup.sampleRate = 44100.0;
+        
+        error = audioDeviceManager.initialise(0, 2, nullptr, true);
+        if (error.isNotEmpty())
+        {
+            DBG("Error initializing audio: " + error);
+        }
+        
+        error = audioDeviceManager.setAudioDeviceSetup(setup, true);
+        if (error.isNotEmpty())
+        {
+            DBG("Error configuring audio device: " + error);
+        }
+    }
+    
+    // Get the configured device and log its details
+    if (auto* device = audioDeviceManager.getCurrentAudioDevice())
+    {
+        DBG("Audio device initialized successfully");
+        DBG("Device name: " + device->getName());
+        DBG("Sample rate: " + juce::String(device->getCurrentSampleRate()));
+        DBG("Buffer size: " + juce::String(device->getCurrentBufferSizeSamples()));
+        
+        // Set the sample rate for the synths based on the actual device sample rate
+        synth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
+        sf2Synth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
+    }
+    else
+    {
+        DBG("Failed to get audio device - attempting fallback initialization");
+        
+        // Fallback to null device for iOS simulator
+        #if JUCE_IOS
+        audioDeviceManager.initialiseWithDefaultDevices(0, 2);
+        synth.setCurrentPlaybackSampleRate(44100.0);
+        sf2Synth.setCurrentPlaybackSampleRate(44100.0);
+        DBG("Using fallback audio configuration for iOS");
+        #endif
+    }
+    
+    audioDeviceManager.addAudioCallback(&audioSourcePlayer);
+    audioSourcePlayer.setSource(this);
+    
+    // Initialize SF2 synth
+    formatManager.registerBasicFormats();
+    
+    // Add voices for polyphony
+    for (int i = 0; i < 128; ++i) {
+        sf2Synth.addVoice(new sfzero::Voice());
+    }
+
+    // Create and load the SF2 sound
+    auto tempFile = juce::File::createTempFile(".sf2");
+    tempFile.replaceWithData(BinaryData::Korg_Triton_Piano_sf2, BinaryData::Korg_Triton_Piano_sf2Size);
+    
+    // Create SF2Sound with the temp file
+    sf2Sound.reset(new sfzero::SF2Sound(tempFile));
+    DBG("SF2 sound created with file: " + tempFile.getFullPathName());
+    
+    sf2Sound->loadRegions();
+    DBG("Regions loaded: " + juce::String(sf2Sound->getNumRegions()));
+    
+    sf2Sound->loadSamples(&formatManager);
+    DBG("Samples loaded");
+    
+    // Clean up temp file
+    tempFile.deleteFile();
+
+    sf2Synth.clearSounds();
+    sf2Synth.addSound(sf2Sound.get());
+    DBG("SF2 sound added to synth");
+
+    // Initialize GUI components
+    addAndMakeVisible(&loadButton);
+    addAndMakeVisible(&playButton);
+    addAndMakeVisible(&stopButton);
+    addAndMakeVisible(&setLoopButton);
+    addAndMakeVisible(&clearLoopButton);
+    addAndMakeVisible(&pianoRoll);
     
     loadButton.setButtonText("Load MIDI File");
     playButton.setButtonText("Play");
@@ -44,15 +130,7 @@ MainComponent::MainComponent()
     setSize(800, 600);
     startTimer(5);
 
-    auto result = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
-    if (result.isNotEmpty())
-    {
-        DBG("Error initializing audio: " + result);
-    }
-    
-    audioDeviceManager.addAudioCallback(&audioSourcePlayer);
-    audioSourcePlayer.setSource(this);
-
+    // Initialize sine wave synth
     for (int i = 0; i < 8; ++i)
     {
         synth.addVoice(new SineWaveVoice());
@@ -62,10 +140,27 @@ MainComponent::MainComponent()
 
 MainComponent::~MainComponent()
 {
+    // First stop any playback
+    isPlaying = false;
+    
+    // Remove audio callback first to prevent audio thread accessing synth
     audioSourcePlayer.setSource(nullptr);
     audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
-    stopTimer();
-    stopMidiFile();
+    
+    // Stop all notes and clear synths
+    sf2Synth.allNotesOff(0, true);
+    synth.allNotesOff(0, true);
+    
+    // Wait briefly for any pending audio processing
+    juce::Thread::sleep(50);
+    
+    // Clear sounds and reset
+    sf2Synth.clearSounds();
+    synth.clearSounds();
+    sf2Sound.reset();
+    
+    // Remove keyboard listener
+    removeKeyListener(this);
 }
 
 void MainComponent::paint(juce::Graphics& g)
@@ -108,7 +203,21 @@ void MainComponent::resized()
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
 {
+    DBG("prepareToPlay called - Sample rate: " + juce::String(sampleRate) + 
+        " Block size: " + juce::String(samplesPerBlockExpected));
+        
+    // Initialize both synths with proper sample rate
     synth.setCurrentPlaybackSampleRate(sampleRate);
+    sf2Synth.setCurrentPlaybackSampleRate(sampleRate);
+    
+    // Clear any lingering notes
+    if (useSF2Synth) {
+        sf2Synth.allNotesOff(0, true);
+    } else {
+        synth.allNotesOff(0, true);
+    }
+    
+    DBG("Synths prepared for playback");
 }
 
 int MainComponent::findEventIndexForBeat(double beat) 
@@ -127,45 +236,69 @@ int MainComponent::findEventIndexForBeat(double beat)
     return low;
 }
 
-void MainComponent::processSegment(const juce::AudioSourceChannelInfo& bufferInfo,
-                                   int segmentStartSample,
-                                   int segmentNumSamples,
-                                   double segmentStartBeat,
-                                   double segmentEndBeat)
+void MainComponent::processSegment(
+    const juce::AudioSourceChannelInfo& bufferInfo,
+    int segmentStartSample,
+    int segmentNumSamples,
+    double segmentStartBeat,
+    double segmentEndBeat)
 {
+    auto* device = audioDeviceManager.getCurrentAudioDevice();
+    if (!device) return;
+    
+    const double sampleRate = device->getCurrentSampleRate();
     juce::MidiBuffer midiBuffer;
     
-    auto* device = audioDeviceManager.getCurrentAudioDevice();
-    const double sampleRate = device->getCurrentSampleRate();
-    const double currentTempo = tempo; // local copy
-    const double secondsPerBeat = 60.0 / currentTempo;
-    
-    // Use binary search (or iterate over all events) to find the first event at or after segmentStartBeat.
     int eventIndex = findEventIndexForBeat(segmentStartBeat);
     
-    // Process events until an event’s beat exceeds segmentEndBeat.
+    // Process events until an event's beat exceeds segmentEndBeat
     while (eventIndex < midiSequence.getNumEvents())
     {
-        double eventBeat = convertTicksToBeats(midiSequence.getEventPointer(eventIndex)->message.getTimeStamp());
-        if (eventBeat > segmentEndBeat)
-            break;
+        auto* eventData = midiSequence.getEventPointer(eventIndex);
+        double eventBeat = convertTicksToBeats(eventData->message.getTimeStamp());
         
-        // Compute the event's offset (in samples) relative to the segment.
-        int offset = segmentStartSample + (int)((eventBeat - segmentStartBeat) * secondsPerBeat * sampleRate);
-        // Use a strict ">" check so that an event exactly at the boundary is processed.
-        if (offset > segmentStartSample + segmentNumSamples)
+        if (eventBeat >= segmentEndBeat)
             break;
-        
-        midiBuffer.addEvent(midiSequence.getEventPointer(eventIndex)->message, offset - segmentStartSample);
+            
+        if (eventBeat >= segmentStartBeat)
+        {
+            double eventOffsetInBeats = eventBeat - segmentStartBeat;
+            double eventTimeMs = convertBeatsToMilliseconds(eventOffsetInBeats);
+            int eventSampleOffset = static_cast<int>((eventTimeMs * sampleRate) / 1000.0);
+            
+            if (eventSampleOffset >= 0 && eventSampleOffset < segmentNumSamples)
+            {
+                midiBuffer.addEvent(eventData->message, 
+                                  bufferInfo.startSample + segmentStartSample + eventSampleOffset);
+                                  
+                if (eventData->message.isNoteOn())
+                {
+                    DBG("Note On - Channel: " + juce::String(eventData->message.getChannel()) +
+                        " Note: " + juce::String(eventData->message.getNoteNumber()) +
+                        " Velocity: " + juce::String(eventData->message.getVelocity()));
+                }
+                else if (eventData->message.isNoteOff())
+                {
+                    DBG("Note Off - Channel: " + juce::String(eventData->message.getChannel()) +
+                        " Note: " + juce::String(eventData->message.getNoteNumber()));
+                }
+            }
+        }
         ++eventIndex;
     }
-    
-    juce::AudioSourceChannelInfo segmentBuffer;
-    segmentBuffer.buffer = bufferInfo.buffer;
-    segmentBuffer.startSample = bufferInfo.startSample + segmentStartSample;
-    segmentBuffer.numSamples = segmentNumSamples;
-    
-    synth.renderNextBlock(*segmentBuffer.buffer, midiBuffer, segmentBuffer.startSample, segmentBuffer.numSamples);
+
+    // Render audio for the appropriate synth
+    if (useSF2Synth) {            
+        sf2Synth.renderNextBlock(*bufferInfo.buffer,
+                                midiBuffer,
+                                bufferInfo.startSample + segmentStartSample,
+                                segmentNumSamples);
+    } else {
+        synth.renderNextBlock(*bufferInfo.buffer,
+                             midiBuffer,
+                             bufferInfo.startSample + segmentStartSample,
+                             segmentNumSamples);
+    }
 }
 
 
@@ -197,8 +330,9 @@ void MainComponent::reTriggerSustainedNotesAt(double boundaryBeat)
 
 void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
 {
+    // Always clear the buffer first
     bufferToFill.clearActiveBufferRegion();
-
+    
     // If looping is enabled and the current playback position is beyond the loop's end,
     // reset it to the loop start. This avoids processing negative durations.
     if (isLooping && (playbackPosition.load() > loopEndBeat))
@@ -206,27 +340,24 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         playbackPosition.store(loopStartBeat);
     }
 
-    if (!isPlaying)
-        return;
-    
     auto* device = audioDeviceManager.getCurrentAudioDevice();
-    if (device == nullptr)
+    if (device == nullptr || !isPlaying)
         return;
-    
+        
     const double sampleRate = device->getCurrentSampleRate();
     const int numSamples = bufferToFill.numSamples;
     
-    // Get a local copy of tempo and compute seconds per beat.
-    const double currentTempo = tempo; // in BPM
+    // Get a local copy of tempo and compute seconds per beat
+    const double currentTempo = tempo;
     const double secondsPerBeat = 60.0 / currentTempo;
     
-    // Calculate how many beats this block covers.
+    // Calculate how many beats this block covers
     const double blockBeats = (numSamples / sampleRate) / secondsPerBeat;
     
-    // Read the current playback position (in beats).
+    // Read the current playback position
     double currentBeat = playbackPosition.load();
     
-    // Compute the “file end” as one beat after the last event’s beat.
+    // Compute the "file end" as one beat after the last event's beat
     double lastEventBeat = 0.0;
     if (midiSequence.getNumEvents() > 0)
     {
@@ -235,7 +366,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
     }
     const double fileEndBeat = lastEventBeat + 1.0;
     
-    // --- Non-looping case: if we are not in loop mode, check for end-of-file.
+    // --- Non-looping case: if we are not in loop mode, check for end-of-file
     if (!isLooping && (currentBeat + blockBeats) >= fileEndBeat)
     {
         double beatsToEnd = fileEndBeat - currentBeat;
@@ -245,7 +376,11 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         playbackPosition.store(fileEndBeat);
         
         isPlaying = false;
-        synth.allNotesOff(0, true);
+        if (useSF2Synth) {
+            sf2Synth.allNotesOff(0, true);
+        } else {
+            synth.allNotesOff(0, true);
+        }
         juce::MessageManager::callAsync([this]() {
             playButton.setEnabled(true);
             stopButton.setEnabled(false);
@@ -254,10 +389,10 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         return;
     }
     
-    // --- Looping case: if we are looping and this block crosses loopEndBeat.
+    // --- Looping case: if we are looping and this block crosses loopEndBeat
     if (isLooping && (currentBeat + blockBeats) >= loopEndBeat)
     {
-        // Process from currentBeat up to loopEndBeat.
+        // Process from currentBeat up to loopEndBeat
         const double beatsToLoopEnd = loopEndBeat - currentBeat;
         const int samplesToLoopEnd = juce::jmin(numSamples, (int)(beatsToLoopEnd * secondsPerBeat * sampleRate));
         processSegment(bufferToFill, 0, samplesToLoopEnd, currentBeat, loopEndBeat);
@@ -266,9 +401,12 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         
         if (currentLoopIteration < loopCount - 1)
         {
-            // For non-final iterations, clear active voices, re-trigger sustained notes at loopStartBeat,
-            // then process the remainder of the block as if starting at loopStartBeat.
-            synth.allNotesOff(0, true);
+            // For non-final iterations, clear active voices, re-trigger sustained notes at loopStartBeat
+            if (useSF2Synth) {
+                sf2Synth.allNotesOff(0, true);
+            } else {
+                synth.allNotesOff(0, true);
+            }
             reTriggerSustainedNotesAt(loopStartBeat);
             
             const double newSegmentStartBeat = loopStartBeat;
@@ -280,27 +418,31 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         }
         else
         {
-            // FINAL loop iteration:
-            // Process the remainder of the block normally from loopEndBeat onward.
+            // FINAL loop iteration
             const double extraBeats = (remainingSamples / sampleRate) / secondsPerBeat;
             double newBeatPosition = loopEndBeat + extraBeats;
             processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, loopEndBeat, newBeatPosition);
             playbackPosition.store(newBeatPosition);
             
-            // Turn off looping so that subsequent blocks process events normally.
+            // Turn off looping so that subsequent blocks process events normally
             isLooping = false;
             
-            // Reset the loop counter so that the loop region remains active for subsequent playbacks.
+            // Reset the loop counter so that the loop region remains active for subsequent playbacks
             currentLoopIteration = 0;
             
-            // Clear lingering voices and re-trigger sustained notes based on the loop end.
-            synth.allNotesOff(0, true);
+            // Clear lingering voices and re-trigger sustained notes based on the loop end
+            if (useSF2Synth) {
+                sf2Synth.allNotesOff(0, true);
+            } else {
+                synth.allNotesOff(0, true);
+            }
             reTriggerSustainedNotesAt(loopEndBeat);
         }
         
         return;
     }
-    // --- Default (non-crossing) case: process the entire block normally.
+    
+    // --- Default (non-crossing) case: process the entire block normally
     processSegment(bufferToFill, 0, numSamples, currentBeat, currentBeat + blockBeats);
     playbackPosition.store(currentBeat + blockBeats);
 }
@@ -501,17 +643,26 @@ void MainComponent::playMidiFile()
 void MainComponent::stopMidiFile()
 {
     isPlaying = false;
-    synth.allNotesOff(0, true);
-    for (int channel = 1; channel <= 16; ++channel)
-    {
-        for (int note = 0; note < 128; ++note)
-            synth.noteOff(channel, note, 0.0f, true);
+    
+    // Stop all notes on the SF2 synth
+    if (useSF2Synth) {
+        sf2Synth.allNotesOff(0, true);
+        for (int channel = 1; channel <= 16; ++channel) {
+            for (int note = 0; note < 128; ++note) {
+                sf2Synth.noteOff(channel, note, 0.0f, true);
+            }
+        }
+    } else {
+        synth.allNotesOff(0, true);
+        for (int channel = 1; channel <= 16; ++channel) {
+            for (int note = 0; note < 128; ++note) {
+                synth.noteOff(channel, note, 0.0f, true);
+            }
+        }
     }
     
     playbackPosition.store(0.0);
-    currentLoopIteration = 0;  // Reset the loop counter for the next playback
-    
-    // Do not set isLooping to false if you want the loop region to persist.
+    currentLoopIteration = 0;
     
     playButton.setEnabled(true);
     stopButton.setEnabled(false);
