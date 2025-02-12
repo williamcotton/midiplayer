@@ -644,6 +644,12 @@ void MainComponent::playMidiFile()
         isPlaying = true;
         playbackPosition.store(0.0);
         currentLoopIteration = 0;
+        
+        // Restore looping state if a loop region is defined
+        if (loopCount > 0 && loopEndBeat > loopStartBeat) {
+            isLooping = true;
+        }
+        
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
         
