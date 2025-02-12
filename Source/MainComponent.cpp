@@ -304,10 +304,10 @@ void MainComponent::processSegment(
 
 void MainComponent::reTriggerSustainedNotesAt(double boundaryBeat)
 {
-    // Define a small tolerance (in beats) to catch events that are just after the boundary.
+    // Define a small tolerance (in beats) to catch events that are just after the boundary
     const double epsilon = 0.05;  // Adjust as needed
     
-    // Iterate over all MIDI events.
+    // Iterate over all MIDI events
     for (int i = 0; i < midiSequence.getNumEvents(); ++i)
     {
         auto* evt = midiSequence.getEventPointer(i);
@@ -316,12 +316,18 @@ void MainComponent::reTriggerSustainedNotesAt(double boundaryBeat)
             double noteOnBeat = convertTicksToBeats(evt->message.getTimeStamp());
             double noteOffBeat = convertTicksToBeats(evt->noteOffObject->message.getTimeStamp());
             
-            // Allow a small tolerance on the noteOnBeat check.
+            // Allow a small tolerance on the noteOnBeat check
             if (noteOnBeat <= (boundaryBeat + epsilon) && noteOffBeat > boundaryBeat)
             {
-                synth.noteOn(evt->message.getChannel(),
-                             evt->message.getNoteNumber(),
-                             evt->message.getVelocity() / 127.0f);
+                if (useSF2Synth) {
+                    sf2Synth.noteOn(evt->message.getChannel(),
+                                  evt->message.getNoteNumber(),
+                                  evt->message.getVelocity() / 127.0f);
+                } else {
+                    synth.noteOn(evt->message.getChannel(),
+                               evt->message.getNoteNumber(),
+                               evt->message.getVelocity() / 127.0f);
+                }
             }
         }
     }
@@ -407,6 +413,8 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
             } else {
                 synth.allNotesOff(0, true);
             }
+            
+            // Re-trigger notes at loop start
             reTriggerSustainedNotesAt(loopStartBeat);
             
             const double newSegmentStartBeat = loopStartBeat;
@@ -418,25 +426,21 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         }
         else
         {
-            // FINAL loop iteration
+            // FINAL loop iteration - handle transition out of loop
             const double extraBeats = (remainingSamples / sampleRate) / secondsPerBeat;
-            double newBeatPosition = loopEndBeat + extraBeats;
-            processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, loopEndBeat, newBeatPosition);
-            playbackPosition.store(newBeatPosition);
+            
+            // Re-trigger notes that should continue past loop end
+            reTriggerSustainedNotesAt(loopEndBeat);
+            
+            // Process the remaining samples starting exactly at loop end
+            processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, loopEndBeat, loopEndBeat + extraBeats);
+            playbackPosition.store(loopEndBeat + extraBeats);
             
             // Turn off looping so that subsequent blocks process events normally
             isLooping = false;
             
             // Reset the loop counter so that the loop region remains active for subsequent playbacks
             currentLoopIteration = 0;
-            
-            // Clear lingering voices and re-trigger sustained notes based on the loop end
-            if (useSF2Synth) {
-                sf2Synth.allNotesOff(0, true);
-            } else {
-                synth.allNotesOff(0, true);
-            }
-            reTriggerSustainedNotesAt(loopEndBeat);
         }
         
         return;
@@ -630,13 +634,21 @@ void MainComponent::playMidiFile()
 {
     if (midiSequence.getNumEvents() > 0)
     {
+        // Stop any currently playing notes
+        if (useSF2Synth) {
+            sf2Synth.allNotesOff(0, true);
+        } else {
+            synth.allNotesOff(0, true);
+        }
+        
         isPlaying = true;
         playbackPosition.store(0.0);
         currentLoopIteration = 0;
-        isLooping = true;
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
-        // Audio scheduling will begin from beat 0.
+        
+        // Trigger initial sustained notes
+        reTriggerSustainedNotesAt(0.0);
     }
 }
 
