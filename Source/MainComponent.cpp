@@ -32,7 +32,7 @@ MainComponent::MainComponent()
     addAndMakeVisible(tempoSlider);
     addAndMakeVisible(tempoLabel);
     
-    tempoLabel.setText("Tempo (BPM)", juce::dontSendNotification);
+    tempoLabel.setText("Tempo", juce::dontSendNotification);
     tempoSlider.setRange(30.0, 300.0, 1.0);
     tempoSlider.setValue(120.0, juce::dontSendNotification);
     tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
@@ -77,7 +77,8 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds();
     auto buttonHeight = 40;
-    auto padding = 10;
+    auto paddingX = 5;
+    auto paddingY = 5;
 
 #if JUCE_IOS
     // Account for iOS safe area at the top
@@ -90,19 +91,19 @@ void MainComponent::resized()
 #endif
 
     auto topControls = area.removeFromTop(buttonHeight);
-    loadButton.setBounds(topControls.removeFromLeft(120).reduced(padding, 0));
-    playButton.setBounds(topControls.removeFromLeft(80).reduced(padding, 0));
-    stopButton.setBounds(topControls.removeFromLeft(80).reduced(padding, 0));
+    loadButton.setBounds(topControls.removeFromLeft(120).reduced(paddingX, paddingY));
+    playButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
+    stopButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
+    tempoLabel.setBounds(topControls.removeFromLeft(100).reduced(paddingX, paddingY));
     
     auto loopControls = area.removeFromTop(buttonHeight);
-    setLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(padding, 0));
-    clearLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(padding, 0));
+    setLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(paddingX, paddingY));
+    clearLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(paddingX, paddingY));
     
     auto tempoControls = loopControls.removeFromLeft(250);
-    tempoLabel.setBounds(tempoControls.removeFromLeft(100).reduced(padding, 0));
-    tempoSlider.setBounds(tempoControls.reduced(padding, 0));
+    tempoSlider.setBounds(tempoControls.reduced(paddingX, paddingY));
     
-    pianoRoll.setBounds(area.reduced(padding));
+    pianoRoll.setBounds(area.reduced(paddingX, paddingY));
 }
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
