@@ -16,6 +16,7 @@
 		21DCCABEE7923481A1C823B3 /* include_juce_audio_utils.mm */ = {isa = PBXBuildFile; fileRef = CE67DE18DCE1CC3B664B2AF1; };
 		2F2DE7180FA17AD1C57322AE /* include_juce_audio_formats.mm */ = {isa = PBXBuildFile; fileRef = 6D54AD72F6F6B13EDBDE80E3; };
 		30F5AA5BC720DBB26CC59DCC /* Cocoa.framework */ = {isa = PBXBuildFile; fileRef = 5A688A107FE3E1D4002F9F03; };
+		33B0D20A4891697BFB543DAA /* include_SFZero.cpp */ = {isa = PBXBuildFile; fileRef = F43BA13A349475CB627EA13B; };
 		3E0AA15B683401F340FE11B5 /* IOKit.framework */ = {isa = PBXBuildFile; fileRef = D84A2F0EBC5653D804FA0E60; };
 		47434BCEC6A622AABC156FDF /* AudioToolbox.framework */ = {isa = PBXBuildFile; fileRef = D854D66D7E55DB34AB831713; };
 		4C751BB4DA07925A0DDE2BE8 /* Metal.framework */ = {isa = PBXBuildFile; fileRef = D1D4FB425543A3D6E9536D94; settings = { ATTRIBUTES = (Weak, ); }; };
@@ -65,6 +66,7 @@
 		65D6063BB8CD14A58A82217B /* Security.framework */ /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		65DE0D16B11D6F739EE120DD /* include_juce_audio_processors_lv2_libs.cpp */ /* include_juce_audio_processors_lv2_libs.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_audio_processors_lv2_libs.cpp; path = ../../JuceLibraryCode/include_juce_audio_processors_lv2_libs.cpp; sourceTree = SOURCE_ROOT; };
 		67F6E2AA2092608626E59399 /* include_juce_audio_processors.mm */ /* include_juce_audio_processors.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_processors.mm; path = ../../JuceLibraryCode/include_juce_audio_processors.mm; sourceTree = SOURCE_ROOT; };
+		69F8A80357F89C6D54F38CCA /* SFZero */ /* SFZero */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SFZero; path = ../../Modules/SFZero; sourceTree = SOURCE_ROOT; };
 		6A44BB236F96E108AA1D4405 /* DiscRecording.framework */ /* DiscRecording.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DiscRecording.framework; path = System/Library/Frameworks/DiscRecording.framework; sourceTree = SDKROOT; };
 		6A7854F1EFD22B428DC47FEA /* juce_audio_basics */ /* juce_audio_basics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_audio_basics; path = "~/JUCE/modules/juce_audio_basics"; sourceTree = "<absolute>"; };
 		6D54AD72F6F6B13EDBDE80E3 /* include_juce_audio_formats.mm */ /* include_juce_audio_formats.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_formats.mm; path = ../../JuceLibraryCode/include_juce_audio_formats.mm; sourceTree = SOURCE_ROOT; };
@@ -92,6 +94,7 @@
 		E3B2D86FA36983BF7EA44F77 /* juce_audio_processors */ /* juce_audio_processors */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_audio_processors; path = "~/JUCE/modules/juce_audio_processors"; sourceTree = "<absolute>"; };
 		E89A65C17E60CE180820A38D /* juce_audio_devices */ /* juce_audio_devices */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_audio_devices; path = "~/JUCE/modules/juce_audio_devices"; sourceTree = "<absolute>"; };
 		EA1A038FB4FF39C76C29D882 /* include_juce_audio_devices.mm */ /* include_juce_audio_devices.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_devices.mm; path = ../../JuceLibraryCode/include_juce_audio_devices.mm; sourceTree = SOURCE_ROOT; };
+		F43BA13A349475CB627EA13B /* include_SFZero.cpp */ /* include_SFZero.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_SFZero.cpp; path = ../../JuceLibraryCode/include_SFZero.cpp; sourceTree = SOURCE_ROOT; };
 		F68473D511455696CC6D404F /* include_juce_gui_extra.mm */ /* include_juce_gui_extra.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_gui_extra.mm; path = ../../JuceLibraryCode/include_juce_gui_extra.mm; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -139,6 +142,7 @@
 				368AFCF9E529EB75249E1028,
 				389CA584A24658775C4D9909,
 				F68473D511455696CC6D404F,
+				F43BA13A349475CB627EA13B,
 				D34FBE3084676E13B065FD91,
 			);
 			name = "JUCE Library Code";
@@ -158,6 +162,7 @@
 				4FBBE13579A86609D7496949,
 				3E9343DC778801811CD9F992,
 				BBF17441BBDAC82CB080958D,
+				69F8A80357F89C6D54F38CCA,
 			);
 			name = "JUCE Modules";
 			sourceTree = "<group>";
@@ -336,6 +341,7 @@
 				CA1AC4ACA0B6A4949E78D6B4,
 				09113BDB16C74F7828F717B5,
 				9007BEDE616E964734BAFF0B,
+				33B0D20A4891697BFB543DAA,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -466,6 +472,7 @@
 					"JUCE_MODULE_AVAILABLE_juce_graphics=1",
 					"JUCE_MODULE_AVAILABLE_juce_gui_basics=1",
 					"JUCE_MODULE_AVAILABLE_juce_gui_extra=1",
+					"JUCE_MODULE_AVAILABLE_SFZero=1",
 					"JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1",
 					"JUCE_STRICT_REFCOUNTEDPOINTER=1",
 					"JUCE_STANDALONE_APPLICATION=1",
@@ -485,6 +492,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../JuceLibraryCode",
 					"$(HOME)/JUCE/modules",
+					"$(SRCROOT)/../../Modules",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = Info-App.plist;
@@ -492,7 +500,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				LLVM_LTO = YES;
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
-				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(HOME)/JUCE/modules";
+				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(HOME)/JUCE/modules $(SRCROOT)/../../Modules";
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.MidiPlayer;
 				PRODUCT_NAME = "MidiPlayer";
 				USE_HEADERMAP = NO;
@@ -527,6 +535,7 @@
 					"JUCE_MODULE_AVAILABLE_juce_graphics=1",
 					"JUCE_MODULE_AVAILABLE_juce_gui_basics=1",
 					"JUCE_MODULE_AVAILABLE_juce_gui_extra=1",
+					"JUCE_MODULE_AVAILABLE_SFZero=1",
 					"JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1",
 					"JUCE_STRICT_REFCOUNTEDPOINTER=1",
 					"JUCE_STANDALONE_APPLICATION=1",
@@ -546,13 +555,14 @@
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../JuceLibraryCode",
 					"$(HOME)/JUCE/modules",
+					"$(SRCROOT)/../../Modules",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = Info-App.plist;
 				INFOPLIST_PREPROCESS = NO;
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
-				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(HOME)/JUCE/modules";
+				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(HOME)/JUCE/modules $(SRCROOT)/../../Modules";
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.MidiPlayer;
 				PRODUCT_NAME = "MidiPlayer";
 				USE_HEADERMAP = NO;

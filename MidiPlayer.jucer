@@ -24,6 +24,7 @@
     <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="SFZero" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
   </MODULES>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1"/>
   <EXPORTFORMATS>
@@ -44,6 +45,7 @@
         <MODULEPATH id="juce_graphics" path="../../../../JUCE/modules"/>
         <MODULEPATH id="juce_gui_basics" path="../../../../JUCE/modules"/>
         <MODULEPATH id="juce_gui_extra" path="../../../../JUCE/modules"/>
+        <MODULEPATH id="SFZero" path="Modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
     <ANDROIDSTUDIO targetFolder="Builds/Android" gradleWrapperVersion="8.3.1">
@@ -63,6 +65,7 @@
         <MODULEPATH id="juce_graphics" path="~/JUCE/modules"/>
         <MODULEPATH id="juce_gui_basics" path="~/JUCE/modules"/>
         <MODULEPATH id="juce_gui_extra" path="~/JUCE/modules"/>
+        <MODULEPATH id="SFZero" path="Modules"/>
       </MODULEPATHS>
     </ANDROIDSTUDIO>
     <XCODE_IPHONE targetFolder="Builds/iOS" UISupportsDocumentBrowser="1" UIFileSharingEnabled="1"
@@ -83,6 +86,7 @@
         <MODULEPATH id="juce_graphics" path="~/JUCE/modules"/>
         <MODULEPATH id="juce_gui_basics" path="~/JUCE/modules"/>
         <MODULEPATH id="juce_gui_extra" path="~/JUCE/modules"/>
+        <MODULEPATH id="SFZero" path="Modules"/>
       </MODULEPATHS>
     </XCODE_IPHONE>
   </EXPORTFORMATS>
