@@ -182,6 +182,7 @@ private:
     juce::TextButton stopButton;
     juce::TextButton setLoopButton;
     juce::TextButton clearLoopButton;
+    juce::ComboBox presetBox;  // Add ComboBox for preset selection
     PianoRollComponent pianoRoll;
 
     // MIDI handling

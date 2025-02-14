@@ -87,6 +87,33 @@ MainComponent::MainComponent()
     // Clean up temp file
     tempFile.deleteFile();
 
+    // Setup preset selection
+    addAndMakeVisible(presetBox);
+    presetBox.setTextWhenNothingSelected("Select Preset");
+    
+    // Populate preset box with available presets
+    for (int i = 0; i < sf2Sound->numSubsounds(); ++i) {
+        presetBox.addItem(sf2Sound->subsoundName(i), i + 1);  // ComboBox items start at 1
+    }
+    
+    // Set initial preset
+    if (presetBox.getNumItems() > 0) {
+        presetBox.setSelectedId(1, juce::dontSendNotification);
+        sf2Sound->useSubsound(0);
+    }
+    
+    // Add listener for preset changes
+    presetBox.onChange = [this] {
+        if (presetBox.getSelectedId() > 0) {
+            // Stop any playing notes
+            sf2Synth.allNotesOff(0, true);
+            
+            // Change the preset
+            sf2Sound->useSubsound(presetBox.getSelectedId() - 1);
+            DBG("Changed to preset: " + presetBox.getText());
+        }
+    };
+
     sf2Synth.clearSounds();
     sf2Synth.addSound(sf2Sound);  // The synth will increment the reference count
     DBG("SF2 sound added to synth");
@@ -191,6 +218,7 @@ void MainComponent::resized()
     loadButton.setBounds(topControls.removeFromLeft(120).reduced(paddingX, paddingY));
     playButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
     stopButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
+    presetBox.setBounds(topControls.removeFromLeft(200).reduced(paddingX, paddingY));  // Add preset box
     tempoLabel.setBounds(topControls.removeFromLeft(100).reduced(paddingX, paddingY));
     
     auto loopControls = area.removeFromTop(buttonHeight);
