@@ -67,7 +67,7 @@ MainComponent::MainComponent()
     
     // Add voices for polyphony
     for (int i = 0; i < 128; ++i) {
-        sf2Synth.addVoice(new sfzero::Voice());
+        sf2Synth.addVoice(std::make_unique<sfzero::Voice>().release());
     }
 
     // Create and load the SF2 sound
@@ -75,7 +75,7 @@ MainComponent::MainComponent()
     tempFile.replaceWithData(BinaryData::Korg_Triton_Piano_sf2, BinaryData::Korg_Triton_Piano_sf2Size);
     
     // Create SF2Sound with the temp file
-    sf2Sound.reset(new sfzero::SF2Sound(tempFile));
+    sf2Sound = std::make_unique<sfzero::SF2Sound>(tempFile);
     DBG("SF2 sound created with file: " + tempFile.getFullPathName());
     
     sf2Sound->loadRegions();
@@ -133,9 +133,9 @@ MainComponent::MainComponent()
     // Initialize sine wave synth
     for (int i = 0; i < 8; ++i)
     {
-        synth.addVoice(new SineWaveVoice());
+        synth.addVoice(std::make_unique<SineWaveVoice>().release());
     }
-    synth.addSound(new SineWaveSound());
+    synth.addSound(std::make_unique<SineWaveSound>().release());
 }
 
 MainComponent::~MainComponent()
