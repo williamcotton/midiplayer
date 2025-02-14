@@ -75,7 +75,7 @@ MainComponent::MainComponent()
     tempFile.replaceWithData(BinaryData::Korg_Triton_Piano_sf2, BinaryData::Korg_Triton_Piano_sf2Size);
     
     // Create SF2Sound with the temp file
-    sf2Sound = std::make_unique<sfzero::SF2Sound>(tempFile);
+    sf2Sound = new sfzero::SF2Sound(tempFile);  // ReferenceCountedObjectPtr will handle the reference counting
     DBG("SF2 sound created with file: " + tempFile.getFullPathName());
     
     sf2Sound->loadRegions();
@@ -88,7 +88,7 @@ MainComponent::MainComponent()
     tempFile.deleteFile();
 
     sf2Synth.clearSounds();
-    sf2Synth.addSound(sf2Sound.get());
+    sf2Synth.addSound(sf2Sound);  // The synth will increment the reference count
     DBG("SF2 sound added to synth");
 
     // Initialize GUI components
@@ -147,17 +147,19 @@ MainComponent::~MainComponent()
     audioSourcePlayer.setSource(nullptr);
     audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
     
-    // Stop all notes and clear synths
+    // Stop all notes
     sf2Synth.allNotesOff(0, true);
     synth.allNotesOff(0, true);
     
     // Wait briefly for any pending audio processing
     juce::Thread::sleep(50);
     
-    // Clear sounds and reset
-    sf2Synth.clearSounds();
+    // Clear sounds AFTER all notes are off and audio processing is stopped
+    sf2Synth.clearSounds();  // This will decrement the reference count
     synth.clearSounds();
-    sf2Sound.reset();
+    
+    // Clear our reference to sf2Sound which will trigger its cleanup
+    sf2Sound = nullptr;
     
     // Remove keyboard listener
     removeKeyListener(this);
@@ -665,18 +667,8 @@ void MainComponent::stopMidiFile()
     // Stop all notes on the SF2 synth
     if (useSF2Synth) {
         sf2Synth.allNotesOff(0, true);
-        for (int channel = 1; channel <= 16; ++channel) {
-            for (int note = 0; note < 128; ++note) {
-                sf2Synth.noteOff(channel, note, 0.0f, true);
-            }
-        }
     } else {
         synth.allNotesOff(0, true);
-        for (int channel = 1; channel <= 16; ++channel) {
-            for (int note = 0; note < 128; ++note) {
-                synth.noteOff(channel, note, 0.0f, true);
-            }
-        }
     }
     
     playbackPosition.store(0.0);

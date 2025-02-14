@@ -206,7 +206,7 @@ private:
     // Add SF2 synth components
     sfzero::Synth sf2Synth;
     bool useSF2Synth = true;  // Default to using SF2 synth
-    std::unique_ptr<sfzero::SF2Sound> sf2Sound;
+    juce::ReferenceCountedObjectPtr<sfzero::SF2Sound> sf2Sound;
     juce::AudioFormatManager formatManager;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)

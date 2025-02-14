@@ -19,11 +19,22 @@ sfzero::SF2Sound::~SF2Sound()
   // The samples all share a single buffer, so make sure they don't all delete
   // it.
   juce::AudioSampleBuffer *buffer = nullptr;
+  
+  // First detach buffer from all samples
   for (juce::HashMap<int, sfzero::Sample *>::Iterator i(samplesByRate_); i.next();)
   {
     buffer = i.getValue()->detachBuffer();
   }
+  
+  // Delete the shared buffer
   delete buffer;
+  
+  // Now delete all the samples
+  for (juce::HashMap<int, sfzero::Sample *>::Iterator i(samplesByRate_); i.next();)
+  {
+    delete i.getValue();
+  }
+  samplesByRate_.clear();
 }
 
 class PresetComparator
