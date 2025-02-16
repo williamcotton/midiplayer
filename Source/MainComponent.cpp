@@ -233,10 +233,7 @@ void MainComponent::resized()
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
 {
-    DBG("prepareToPlay called - Sample rate: " + juce::String(sampleRate) + 
-        " Block size: " + juce::String(samplesPerBlockExpected));
-        
-    // Initialize both synths with proper sample rate
+    // Pre-allocate buffers and prepare synths with proper sample rate
     synth.setCurrentPlaybackSampleRate(sampleRate);
     sf2Synth.setCurrentPlaybackSampleRate(sampleRate);
     
@@ -247,7 +244,10 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
         synth.allNotesOff(0, true);
     }
     
-    DBG("Synths prepared for playback");
+    // Reset playback state
+    playbackPosition.store(0.0, std::memory_order_release);
+    isPlaying = false;
+    currentLoopIteration = 0;
 }
 
 int MainComponent::findEventIndexForBeat(double beat) 
@@ -279,42 +279,28 @@ void MainComponent::processSegment(
     const double sampleRate = device->getCurrentSampleRate();
     juce::MidiBuffer midiBuffer;
     
-    int eventIndex = findEventIndexForBeat(segmentStartBeat);
+    // Pre-calculate event indices for this segment to avoid searching in the audio thread
+    const int startEventIndex = findEventIndexForBeat(segmentStartBeat);
+    const int endEventIndex = findEventIndexForBeat(segmentEndBeat);
     
-    // Process events until an event's beat exceeds segmentEndBeat
-    while (eventIndex < midiSequence.getNumEvents())
+    // Process only events within our time window
+    for (int eventIndex = startEventIndex; eventIndex < endEventIndex && eventIndex < midiSequence.getNumEvents(); ++eventIndex)
     {
         auto* eventData = midiSequence.getEventPointer(eventIndex);
-        double eventBeat = convertTicksToBeats(eventData->message.getTimeStamp());
+        const double eventBeat = convertTicksToBeats(eventData->message.getTimeStamp());
         
-        if (eventBeat >= segmentEndBeat)
-            break;
-            
-        if (eventBeat >= segmentStartBeat)
+        if (eventBeat >= segmentStartBeat && eventBeat < segmentEndBeat)
         {
-            double eventOffsetInBeats = eventBeat - segmentStartBeat;
-            double eventTimeMs = convertBeatsToMilliseconds(eventOffsetInBeats);
-            int eventSampleOffset = static_cast<int>((eventTimeMs * sampleRate) / 1000.0);
+            const double eventOffsetInBeats = eventBeat - segmentStartBeat;
+            const double eventTimeMs = convertBeatsToMilliseconds(eventOffsetInBeats);
+            const int eventSampleOffset = static_cast<int>((eventTimeMs * sampleRate) / 1000.0);
             
             if (eventSampleOffset >= 0 && eventSampleOffset < segmentNumSamples)
             {
                 midiBuffer.addEvent(eventData->message, 
                                   bufferInfo.startSample + segmentStartSample + eventSampleOffset);
-                                  
-                if (eventData->message.isNoteOn())
-                {
-                    DBG("Note On - Channel: " + juce::String(eventData->message.getChannel()) +
-                        " Note: " + juce::String(eventData->message.getNoteNumber()) +
-                        " Velocity: " + juce::String(eventData->message.getVelocity()));
-                }
-                else if (eventData->message.isNoteOff())
-                {
-                    DBG("Note Off - Channel: " + juce::String(eventData->message.getChannel()) +
-                        " Note: " + juce::String(eventData->message.getNoteNumber()));
-                }
             }
         }
-        ++eventIndex;
     }
 
     // Render audio for the appropriate synth
@@ -369,116 +355,65 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
     // Always clear the buffer first
     bufferToFill.clearActiveBufferRegion();
     
-    // If looping is enabled and the current playback position is beyond the loop's end,
-    // reset it to the loop start. This avoids processing negative durations.
-    if (isLooping && (playbackPosition.load() > loopEndBeat))
-    {
-        playbackPosition.store(loopStartBeat);
-    }
-
+    // Early return if not playing or no device
     auto* device = audioDeviceManager.getCurrentAudioDevice();
     if (device == nullptr || !isPlaying)
         return;
         
+    // Cache all values needed for this block to avoid any potential thread sync issues
+    const double currentTempo = tempo;
     const double sampleRate = device->getCurrentSampleRate();
     const int numSamples = bufferToFill.numSamples;
-    
-    // Get a local copy of tempo and compute seconds per beat
-    const double currentTempo = tempo;
     const double secondsPerBeat = 60.0 / currentTempo;
-    
-    // Calculate how many beats this block covers
     const double blockBeats = (numSamples / sampleRate) / secondsPerBeat;
+    const double currentBeat = playbackPosition.load(std::memory_order_acquire);
     
-    // Read the current playback position
-    double currentBeat = playbackPosition.load();
-    
-    // Compute the "file end" as one beat after the last event's beat
-    double lastEventBeat = 0.0;
-    if (midiSequence.getNumEvents() > 0)
+    // Handle loop point crossing
+    if (isLooping && (currentBeat > loopEndBeat))
     {
-        auto* lastEvent = midiSequence.getEventPointer(midiSequence.getNumEvents() - 1);
-        lastEventBeat = convertTicksToBeats(lastEvent->message.getTimeStamp());
-    }
-    const double fileEndBeat = lastEventBeat + 1.0;
-    
-    // --- Non-looping case: if we are not in loop mode, check for end-of-file
-    if (!isLooping && (currentBeat + blockBeats) >= fileEndBeat)
-    {
-        double beatsToEnd = fileEndBeat - currentBeat;
-        int samplesToEnd = juce::jmin(numSamples, (int)(beatsToEnd * secondsPerBeat * sampleRate));
-        
-        processSegment(bufferToFill, 0, samplesToEnd, currentBeat, fileEndBeat);
-        playbackPosition.store(fileEndBeat);
-        
-        isPlaying = false;
-        if (useSF2Synth) {
-            sf2Synth.allNotesOff(0, true);
+        if (currentLoopIteration < loopCount - 1) {
+            currentLoopIteration++;
+            playbackPosition.store(loopStartBeat, std::memory_order_release);
+            processSegment(bufferToFill, 0, numSamples, loopStartBeat, loopStartBeat + blockBeats);
         } else {
-            synth.allNotesOff(0, true);
+            // Exit loop mode and continue normal playback
+            isLooping = false;
+            currentLoopIteration = 0;
+            processSegment(bufferToFill, 0, numSamples, currentBeat, currentBeat + blockBeats);
+            playbackPosition.store(currentBeat + blockBeats, std::memory_order_release);
         }
-        juce::MessageManager::callAsync([this]() {
-            playButton.setEnabled(true);
-            stopButton.setEnabled(false);
-        });
-        
         return;
     }
+
+    // Handle end of file
+    const double fileEndBeat = midiSequence.getNumEvents() > 0 ? 
+        convertTicksToBeats(midiSequence.getEventPointer(midiSequence.getNumEvents() - 1)->message.getTimeStamp()) + 1.0 : 0.0;
     
-    // --- Looping case: if we are looping and this block crosses loopEndBeat
-    if (isLooping && (currentBeat + blockBeats) >= loopEndBeat)
+    if (!isLooping && (currentBeat + blockBeats) >= fileEndBeat)
     {
-        // Process from currentBeat up to loopEndBeat
-        const double beatsToLoopEnd = loopEndBeat - currentBeat;
-        const int samplesToLoopEnd = juce::jmin(numSamples, (int)(beatsToLoopEnd * secondsPerBeat * sampleRate));
-        processSegment(bufferToFill, 0, samplesToLoopEnd, currentBeat, loopEndBeat);
+        const double beatsToEnd = fileEndBeat - currentBeat;
+        const int samplesToEnd = juce::jmin(numSamples, static_cast<int>(beatsToEnd * secondsPerBeat * sampleRate));
         
-        int remainingSamples = numSamples - samplesToLoopEnd;
+        processSegment(bufferToFill, 0, samplesToEnd, currentBeat, fileEndBeat);
+        playbackPosition.store(fileEndBeat, std::memory_order_release);
         
-        if (currentLoopIteration < loopCount - 1)
-        {
-            // For non-final iterations, clear active voices, re-trigger sustained notes at loopStartBeat
+        // Schedule UI updates on the message thread instead of doing them here
+        juce::MessageManager::callAsync([this]() {
+            isPlaying = false;
             if (useSF2Synth) {
                 sf2Synth.allNotesOff(0, true);
             } else {
                 synth.allNotesOff(0, true);
             }
-            
-            // Re-trigger notes at loop start
-            reTriggerSustainedNotesAt(loopStartBeat);
-            
-            const double newSegmentStartBeat = loopStartBeat;
-            const double newSegmentEndBeat = newSegmentStartBeat + (remainingSamples / sampleRate) / secondsPerBeat;
-            processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, newSegmentStartBeat, newSegmentEndBeat);
-            playbackPosition.store(newSegmentEndBeat);
-            
-            currentLoopIteration++;            
-        }
-        else
-        {
-            // FINAL loop iteration - handle transition out of loop
-            const double extraBeats = (remainingSamples / sampleRate) / secondsPerBeat;
-            
-            // Re-trigger notes that should continue past loop end
-            reTriggerSustainedNotesAt(loopEndBeat);
-            
-            // Process the remaining samples starting exactly at loop end
-            processSegment(bufferToFill, samplesToLoopEnd, remainingSamples, loopEndBeat, loopEndBeat + extraBeats);
-            playbackPosition.store(loopEndBeat + extraBeats);
-            
-            // Turn off looping so that subsequent blocks process events normally
-            isLooping = false;
-            
-            // Reset the loop counter so that the loop region remains active for subsequent playbacks
-            currentLoopIteration = 0;
-        }
-        
+            playButton.setEnabled(true);
+            stopButton.setEnabled(false);
+        });
         return;
     }
-    
-    // --- Default (non-crossing) case: process the entire block normally
+
+    // Normal playback
     processSegment(bufferToFill, 0, numSamples, currentBeat, currentBeat + blockBeats);
-    playbackPosition.store(currentBeat + blockBeats);
+    playbackPosition.store(currentBeat + blockBeats, std::memory_order_release);
 }
 
 
