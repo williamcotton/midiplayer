@@ -8,6 +8,14 @@
             file="SoundFonts/Korg_Triton_Piano.sf2"/>
     </GROUP>
     <GROUP id="{95E561C4-6E78-D90A-5347-EF77B013A7DB}" name="Source">
+      <FILE id="HqHOea" name="MidiSchedulerAudioSource.cpp" compile="1" resource="0"
+            file="Source/MidiSchedulerAudioSource.cpp"/>
+      <FILE id="vF3Sbq" name="MidiSchedulerAudioSource.h" compile="0" resource="0"
+            file="Source/MidiSchedulerAudioSource.h"/>
+      <FILE id="krHG8z" name="SynthAudioSource.cpp" compile="1" resource="0"
+            file="Source/SynthAudioSource.cpp"/>
+      <FILE id="mgNhwA" name="SynthAudioSource.h" compile="0" resource="0"
+            file="Source/SynthAudioSource.h"/>
       <FILE id="aI6XUM" name="PianoRollComponent.h" compile="0" resource="0"
             file="Source/PianoRollComponent.h"/>
       <FILE id="HZn9Ep" name="MainComponent.h" compile="0" resource="0" file="Source/MainComponent.h"/>

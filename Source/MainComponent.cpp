@@ -1,196 +1,149 @@
 #include "MainComponent.h"
+#include "SynthAudioSource.h" // Make sure this header is available in your project
 
 MainComponent::MainComponent()
-{
-    // Enable keyboard input
-    setWantsKeyboardFocus(true);
-    addKeyListener(this);
-    
-    DBG("Initializing audio device manager...");
-    
-    // Initialize audio device manager with default device
-    auto error = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
-    if (error.isNotEmpty())
-    {
-        DBG("Error initializing with default devices: " + error);
-        
-        // If default initialization fails, try with specific settings
-        auto setup = audioDeviceManager.getAudioDeviceSetup();
-        setup.outputChannels = 2;
-        setup.useDefaultOutputChannels = true;
-        setup.bufferSize = 1024;  // Larger buffer size for stability
-        setup.sampleRate = 44100.0;
-        
-        error = audioDeviceManager.initialise(0, 2, nullptr, true);
-        if (error.isNotEmpty())
-        {
-            DBG("Error initializing audio: " + error);
-        }
-        
-        error = audioDeviceManager.setAudioDeviceSetup(setup, true);
-        if (error.isNotEmpty())
-        {
-            DBG("Error configuring audio device: " + error);
-        }
-    }
-    
-    // Get the configured device and log its details
-    if (auto* device = audioDeviceManager.getCurrentAudioDevice())
-    {
-        DBG("Audio device initialized successfully");
-        DBG("Device name: " + device->getName());
-        DBG("Sample rate: " + juce::String(device->getCurrentSampleRate()));
-        DBG("Buffer size: " + juce::String(device->getCurrentBufferSizeSamples()));
-        
-        // Set the sample rate for the synths based on the actual device sample rate
-        synth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
-        sf2Synth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
-    }
-    else
-    {
-        DBG("Failed to get audio device - attempting fallback initialization");
-        
-        // Fallback to null device for iOS simulator
-        #if JUCE_IOS
-        audioDeviceManager.initialiseWithDefaultDevices(0, 2);
-        synth.setCurrentPlaybackSampleRate(44100.0);
-        sf2Synth.setCurrentPlaybackSampleRate(44100.0);
-        DBG("Using fallback audio configuration for iOS");
-        #endif
-    }
-    
-    audioDeviceManager.addAudioCallback(&audioSourcePlayer);
-    audioSourcePlayer.setSource(this);
-    
-    // Initialize SF2 synth
-    formatManager.registerBasicFormats();
-    
-    // Add voices for polyphony
-    for (int i = 0; i < 128; ++i) {
-        sf2Synth.addVoice(std::make_unique<sfzero::Voice>().release());
-    }
+    : loadButton("Load MIDI File"), playButton("Play"), stopButton("Stop"),
+      setLoopButton("Set Loop"), clearLoopButton("Clear Loop"), pianoRoll(),
+      tempoSlider(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight),
+      tempoLabel("TempoLabel", "Tempo") {
+  // Enable keyboard input and add ourselves as a key listener.
+  setWantsKeyboardFocus(true);
+  addKeyListener(this);
 
-    // Create and load the SF2 sound
-    auto tempFile = juce::File::createTempFile(".sf2");
-    tempFile.replaceWithData(BinaryData::Korg_Triton_Piano_sf2, BinaryData::Korg_Triton_Piano_sf2Size);
-    
-    // Create SF2Sound with the temp file
-    sf2Sound = new sfzero::SF2Sound(tempFile);  // ReferenceCountedObjectPtr will handle the reference counting
-    DBG("SF2 sound created with file: " + tempFile.getFullPathName());
-    
-    sf2Sound->loadRegions();
-    DBG("Regions loaded: " + juce::String(sf2Sound->getNumRegions()));
-    
-    sf2Sound->loadSamples(&formatManager);
-    DBG("Samples loaded");
-    
-    // Clean up temp file
-    tempFile.deleteFile();
+  // Initialize the audio device manager (0 inputs, 2 outputs)
+  auto error = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
+  if (error.isNotEmpty()) {
+    DBG("Audio device initialization error: " + error);
+  }
 
-    // Setup preset selection
-    addAndMakeVisible(presetBox);
-    presetBox.setTextWhenNothingSelected("Select Preset");
-    
-    // Populate preset box with available presets
-    for (int i = 0; i < sf2Sound->numSubsounds(); ++i) {
-        presetBox.addItem(sf2Sound->subsoundName(i), i + 1);  // ComboBox items start at 1
-    }
-    
-    // Set initial preset
-    if (presetBox.getNumItems() > 0) {
+  // Add our AudioSourcePlayer as a callback to the device manager.
+  audioDeviceManager.addAudioCallback(&audioSourcePlayer);
+
+  // Create a MixerAudioSource.
+  audioMixerSource = std::make_unique<juce::MixerAudioSource>();
+
+  // Create our basic SynthAudioSource (which now does no scheduling).
+  synthAudioSource = std::make_unique<SynthAudioSource>();
+
+  if (synthAudioSource != nullptr) {
+    if (auto *sound = synthAudioSource->getSF2Sound()) {
+      presetBox.setTextWhenNothingSelected("Select Preset");
+      presetBox.clear();
+      for (int i = 0; i < sound->numSubsounds(); ++i) {
+        presetBox.addItem(sound->subsoundName(i),
+                          i + 1); // ComboBox items are 1-indexed
+      }
+
+      // Set initial preset if available
+      if (presetBox.getNumItems() > 0) {
         presetBox.setSelectedId(1, juce::dontSendNotification);
-        sf2Sound->useSubsound(0);
-    }
-    
-    // Add listener for preset changes
-    presetBox.onChange = [this] {
+        sound->useSubsound(0);
+      }
+
+      // Add an onChange callback for when the user selects a new preset.
+      presetBox.onChange = [this, sound]() {
         if (presetBox.getSelectedId() > 0) {
-            // Stop any playing notes
-            sf2Synth.allNotesOff(0, true);
-            
-            // Change the preset
-            sf2Sound->useSubsound(presetBox.getSelectedId() - 1);
-            DBG("Changed to preset: " + presetBox.getText());
+          // Stop any playing notes from the synth.
+          synthAudioSource->getSF2Synth()->allNotesOff(0, true);
+          // Change the preset (subsound) – subtract 1 because the combo box is
+          // 1-indexed.
+          sound->useSubsound(presetBox.getSelectedId() - 1);
+          DBG("Changed to preset: " + presetBox.getText());
         }
-    };
-
-    sf2Synth.clearSounds();
-    sf2Synth.addSound(sf2Sound);  // The synth will increment the reference count
-    DBG("SF2 sound added to synth");
-
-    // Initialize GUI components
-    addAndMakeVisible(&loadButton);
-    addAndMakeVisible(&playButton);
-    addAndMakeVisible(&stopButton);
-    addAndMakeVisible(&setLoopButton);
-    addAndMakeVisible(&clearLoopButton);
-    addAndMakeVisible(&pianoRoll);
-    
-    loadButton.setButtonText("Load MIDI File");
-    playButton.setButtonText("Play");
-    stopButton.setButtonText("Stop");
-    setLoopButton.setButtonText("Set Loop");
-    clearLoopButton.setButtonText("Clear Loop");
-    
-    playButton.setEnabled(false);
-    stopButton.setEnabled(false);
-    
-    loadButton.onClick = [this]() { loadMidiFile(); };
-    playButton.onClick = [this]() { playMidiFile(); };
-    stopButton.onClick = [this]() { stopMidiFile(); };
-    setLoopButton.onClick = [this]() { setupLoopRegion(); };
-    clearLoopButton.onClick = [this]() { clearLoopRegion(); };
-    
-    // Setup tempo control
-    addAndMakeVisible(tempoSlider);
-    addAndMakeVisible(tempoLabel);
-    
-    tempoLabel.setText("Tempo", juce::dontSendNotification);
-    tempoSlider.setRange(30.0, 300.0, 1.0);
-    tempoSlider.setValue(120.0, juce::dontSendNotification);
-    tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
-    tempoSlider.onValueChange = [this] { 
-        tempo = tempoSlider.getValue();
-        DBG("Tempo changed to: " + juce::String(tempo) + " BPM");
-    };
-    
-    setSize(800, 600);
-    startTimer(5);
-
-    // Initialize sine wave synth
-    for (int i = 0; i < 8; ++i)
-    {
-        synth.addVoice(std::make_unique<SineWaveVoice>().release());
+      };
     }
-    synth.addSound(std::make_unique<SineWaveSound>().release());
+  }
+
+  // Create the MidiSchedulerAudioSource, passing the synth.
+  midiSchedulerAudioSource =
+      std::make_unique<MidiSchedulerAudioSource>(synthAudioSource.get());
+
+  // Add the scheduler (which now handles looping and playback) to the mixer.
+  audioMixerSource->addInputSource(midiSchedulerAudioSource.get(), false);
+
+  // Set the mixer as the source for the AudioSourcePlayer.
+  audioSourcePlayer.setSource(audioMixerSource.get());
+
+  //--- GUI Setup ---
+  addAndMakeVisible(loadButton);
+  addAndMakeVisible(playButton);
+  addAndMakeVisible(stopButton);
+  addAndMakeVisible(setLoopButton);
+  addAndMakeVisible(clearLoopButton);
+  addAndMakeVisible(presetBox);
+  addAndMakeVisible(pianoRoll);
+
+  // Set button text.
+  loadButton.setButtonText("Load MIDI File");
+  playButton.setButtonText("Play");
+  stopButton.setButtonText("Stop");
+  setLoopButton.setButtonText("Set Loop");
+  clearLoopButton.setButtonText("Clear Loop");
+
+  // Button callbacks.
+  loadButton.onClick = [this]() { loadMidiFile(); };
+  playButton.onClick = [this]() { playMidiFile(); };
+  stopButton.onClick = [this]() { stopMidiFile(); };
+  setLoopButton.onClick = [this]() { setupLoopRegion(); };
+  clearLoopButton.onClick = [this]() { clearLoopRegion(); };
+
+  //--- Tempo Slider & Label Setup ---
+  addAndMakeVisible(tempoSlider);
+  addAndMakeVisible(tempoLabel);
+
+  tempoLabel.setText("Tempo", juce::dontSendNotification);
+  tempoSlider.setRange(30.0, 300.0, 1.0);
+  tempoSlider.setValue(120.0, juce::dontSendNotification);
+  tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
+  tempoSlider.onValueChange = [this]() {
+    double newTempo = tempoSlider.getValue();
+    tempo = newTempo; // Update our member variable
+    midiSchedulerAudioSource->setTempo(newTempo);
+    DBG("Tempo changed to: " + juce::String(newTempo) + " BPM");
+  };
+
+  midiSchedulerAudioSource->onPlaybackStopped = [this]() {
+    // This code executes on the message thread.
+    playButton.setEnabled(true);
+    stopButton.setEnabled(false);
+    // Optionally update any other UI state.
+  };
+
+  // Set the size of the MainComponent.
+  setSize(800, 600);
+
+  // Start our timer (for example, to update the piano roll playhead).
+  startTimer(5);
+
+  // Initialize other playback and loop-related variables.
+  isPlaying = false;
+  currentEvent = 0;
+  playbackPosition.store(0.0);
+  lastTime = juce::Time::getMillisecondCounterHiRes();
+  currentLoopIteration = 0;
+  loopStartBeat = 0.0;
+  loopEndBeat = 0.0;
+  loopCount = 0;
+  isLooping = false;
+
 }
 
-MainComponent::~MainComponent()
-{
-    // First stop any playback
-    isPlaying = false;
-    
-    // Remove audio callback first to prevent audio thread accessing synth
+  MainComponent::~MainComponent() {
+    // First, disconnect the audio callback.
     audioSourcePlayer.setSource(nullptr);
+
+    // Remove all inputs from the mixer.
+    if (audioMixerSource)
+      audioMixerSource->removeAllInputs();
+
+    // Remove our audio callback from the audio device manager.
     audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
-    
-    // Stop all notes
-    sf2Synth.allNotesOff(0, true);
-    synth.allNotesOff(0, true);
-    
-    // Wait briefly for any pending audio processing
-    juce::Thread::sleep(50);
-    
-    // Clear sounds AFTER all notes are off and audio processing is stopped
-    sf2Synth.clearSounds();  // This will decrement the reference count
-    synth.clearSounds();
-    
-    // Clear our reference to sf2Sound which will trigger its cleanup
-    sf2Sound = nullptr;
-    
-    // Remove keyboard listener
+
+    // Remove ourselves as a key listener.
     removeKeyListener(this);
-}
+
+    // (Any additional cleanup for MIDI, SF2, etc., can be added here.)
+  }
 
 void MainComponent::paint(juce::Graphics& g)
 {
@@ -229,25 +182,6 @@ void MainComponent::resized()
     tempoSlider.setBounds(tempoControls.reduced(paddingX, paddingY));
     
     pianoRoll.setBounds(area.reduced(paddingX, paddingY));
-}
-
-void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
-{
-    // Pre-allocate buffers and prepare synths with proper sample rate
-    synth.setCurrentPlaybackSampleRate(sampleRate);
-    sf2Synth.setCurrentPlaybackSampleRate(sampleRate);
-    
-    // Clear any lingering notes
-    if (useSF2Synth) {
-        sf2Synth.allNotesOff(0, true);
-    } else {
-        synth.allNotesOff(0, true);
-    }
-    
-    // Reset playback state
-    playbackPosition.store(0.0, std::memory_order_release);
-    isPlaying = false;
-    currentLoopIteration = 0;
 }
 
 int MainComponent::findEventIndexForBeat(double beat) 
@@ -350,88 +284,16 @@ void MainComponent::reTriggerSustainedNotesAt(double boundaryBeat)
     }
 }
 
-
-void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
-{
-    // Always clear the buffer first
-    bufferToFill.clearActiveBufferRegion();
-    
-    // Early return if not playing or no device
-    auto* device = audioDeviceManager.getCurrentAudioDevice();
-    if (device == nullptr || !isPlaying)
-        return;
-        
-    // Cache all values needed for this block to avoid any potential thread sync issues
-    const double currentTempo = tempo;
-    const double sampleRate = device->getCurrentSampleRate();
-    const int numSamples = bufferToFill.numSamples;
-    const double secondsPerBeat = 60.0 / currentTempo;
-    const double blockBeats = (numSamples / sampleRate) / secondsPerBeat;
-    const double currentBeat = playbackPosition.load(std::memory_order_acquire);
-    
-    // Handle loop point crossing
-    if (isLooping && (currentBeat > loopEndBeat))
-    {
-        if (currentLoopIteration < loopCount - 1) {
-            currentLoopIteration++;
-            playbackPosition.store(loopStartBeat, std::memory_order_release);
-            processSegment(bufferToFill, 0, numSamples, loopStartBeat, loopStartBeat + blockBeats);
-        } else {
-            // Exit loop mode and continue normal playback
-            isLooping = false;
-            currentLoopIteration = 0;
-            processSegment(bufferToFill, 0, numSamples, currentBeat, currentBeat + blockBeats);
-            playbackPosition.store(currentBeat + blockBeats, std::memory_order_release);
-        }
-        return;
-    }
-
-    // Handle end of file
-    const double fileEndBeat = midiSequence.getNumEvents() > 0 ? 
-        convertTicksToBeats(midiSequence.getEventPointer(midiSequence.getNumEvents() - 1)->message.getTimeStamp()) + 1.0 : 0.0;
-    
-    if (!isLooping && (currentBeat + blockBeats) >= fileEndBeat)
-    {
-        const double beatsToEnd = fileEndBeat - currentBeat;
-        const int samplesToEnd = juce::jmin(numSamples, static_cast<int>(beatsToEnd * secondsPerBeat * sampleRate));
-        
-        processSegment(bufferToFill, 0, samplesToEnd, currentBeat, fileEndBeat);
-        playbackPosition.store(fileEndBeat, std::memory_order_release);
-        
-        // Schedule UI updates on the message thread instead of doing them here
-        juce::MessageManager::callAsync([this]() {
-            isPlaying = false;
-            if (useSF2Synth) {
-                sf2Synth.allNotesOff(0, true);
-            } else {
-                synth.allNotesOff(0, true);
-            }
-            playButton.setEnabled(true);
-            stopButton.setEnabled(false);
-        });
-        return;
-    }
-
-    // Normal playback
-    processSegment(bufferToFill, 0, numSamples, currentBeat, currentBeat + blockBeats);
-    playbackPosition.store(currentBeat + blockBeats, std::memory_order_release);
-}
-
-
-
-void MainComponent::releaseResources()
-{
-}
-
 bool MainComponent::isPositionInLoop(double beat) const
 {
     return isLooping && beat >= loopStartBeat && beat < loopEndBeat;
 }
 
 void MainComponent::timerCallback() {
-  // Simply update the piano roll's playhead using the current playback
-  // position.
-  pianoRoll.setPlaybackPosition(playbackPosition.load());
+  // Instead of using a local playbackPosition member,
+  // get the position from the scheduler.
+  double pos = midiSchedulerAudioSource->getPlaybackPosition();
+  pianoRoll.setPlaybackPosition(pos);
 }
 
 void MainComponent::loadMidiFile()
@@ -596,100 +458,69 @@ void MainComponent::loadMidiFile()
     DBG("loadMidiFile() setup completed");
 }
 
-void MainComponent::playMidiFile()
-{
-    if (midiSequence.getNumEvents() > 0)
-    {
-        // Stop any currently playing notes
-        if (useSF2Synth) {
-            sf2Synth.allNotesOff(0, true);
-        } else {
-            synth.allNotesOff(0, true);
+void MainComponent::playMidiFile() {
+  if (midiSequence.getNumEvents() > 0) {
+    // Stop any lingering notes.
+    if (useSF2Synth)
+      sf2Synth.allNotesOff(0, true);
+    else
+      synth.allNotesOff(0, true);
+
+    // Forward the MIDI sequence and tempo to the scheduler.
+    midiSchedulerAudioSource->setMidiSequence(midiSequence);
+    // midiSchedulerAudioSource->setTempo(tempo);
+    midiSchedulerAudioSource->startPlayback();
+
+    isPlaying = true;
+    playButton.setEnabled(false);
+    stopButton.setEnabled(true);
+  }
+}
+
+void MainComponent::stopMidiFile() {
+  isPlaying = false;
+  midiSchedulerAudioSource->stopPlayback();
+  playbackPosition.store(0.0);
+  playButton.setEnabled(true);
+  stopButton.setEnabled(false);
+}
+
+void MainComponent::setupLoopRegion() {
+  auto dialogWindow = std::make_unique<juce::AlertWindow>(
+      "Set Loop Region", "Enter loop parameters (in beats)",
+      juce::AlertWindow::QuestionIcon);
+
+  dialogWindow->addTextEditor("startBeat", "0", "Start Beat:");
+  dialogWindow->addTextEditor("endBeat", "4", "End Beat:");
+  dialogWindow->addTextEditor("loopCount", "2", "Number of Loops:");
+
+  dialogWindow->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+  dialogWindow->addButton("Cancel", 0,
+                          juce::KeyPress(juce::KeyPress::escapeKey));
+
+  dialogWindow->enterModalState(
+      true, juce::ModalCallbackFunction::create([this, dialogWindow = std::move(
+                                                           dialogWindow)](
+                                                    int result) mutable {
+        if (result == 1) {
+          double startBeat =
+              dialogWindow->getTextEditorContents("startBeat").getDoubleValue();
+          double endBeat =
+              dialogWindow->getTextEditorContents("endBeat").getDoubleValue();
+          int loops =
+              dialogWindow->getTextEditorContents("loopCount").getIntValue();
+
+          // Update the piano roll display.
+          pianoRoll.setLoopRegion(startBeat, endBeat, loops);
+
+          // Forward the loop region to the scheduler.
+          midiSchedulerAudioSource->setLoopRegion(startBeat, endBeat, loops);
+
+          // Stop playback so the new loop takes effect.
+          stopMidiFile();
         }
-        
-        isPlaying = true;
-        playbackPosition.store(0.0);
-        currentLoopIteration = 0;
-        
-        // Restore looping state if a loop region is defined
-        if (loopCount > 0 && loopEndBeat > loopStartBeat) {
-            isLooping = true;
-        }
-        
-        playButton.setEnabled(false);
-        stopButton.setEnabled(true);
-        
-        // Trigger initial sustained notes
-        reTriggerSustainedNotesAt(0.0);
-    }
+      }));
 }
-
-void MainComponent::stopMidiFile()
-{
-    isPlaying = false;
-    
-    // Stop all notes on the SF2 synth
-    if (useSF2Synth) {
-        sf2Synth.allNotesOff(0, true);
-    } else {
-        synth.allNotesOff(0, true);
-    }
-    
-    playbackPosition.store(0.0);
-    currentLoopIteration = 0;
-    
-    playButton.setEnabled(true);
-    stopButton.setEnabled(false);
-}
-
-
-void MainComponent::setupLoopRegion()
-{
-    auto dialogWindow = std::make_unique<juce::AlertWindow>(
-        "Set Loop Region",
-        "Enter loop parameters (in beats)",
-        juce::AlertWindow::QuestionIcon);
-
-    dialogWindow->addTextEditor("startBeat", "0", "Start Beat:");
-    dialogWindow->addTextEditor("endBeat", "4", "End Beat:");
-    dialogWindow->addTextEditor("loopCount", "2", "Number of Loops:");
-
-    dialogWindow->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
-    dialogWindow->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-
-    dialogWindow->enterModalState(true,
-        juce::ModalCallbackFunction::create(
-            [this, dialogWindow = std::move(dialogWindow)](int result) mutable
-            {
-                if (result == 1)  // "OK" pressed
-                {
-                    double startBeat = dialogWindow->getTextEditorContents("startBeat").getDoubleValue();
-                    double endBeat = dialogWindow->getTextEditorContents("endBeat").getDoubleValue();
-                    int loops = dialogWindow->getTextEditorContents("loopCount").getIntValue();
-                    
-                    // Update the piano roll display.
-                    pianoRoll.setLoopRegion(startBeat, endBeat, loops);
-
-                    // Update internal loop parameters.
-                    loopStartBeat = startBeat;
-                    loopEndBeat = endBeat;
-                    loopCount = loops;
-                    isLooping = (loopCount > 0);
-                    currentLoopIteration = 0;
-
-                    // Stop the playback
-                    stopMidiFile();
-                    
-                    // If the current playback position is beyond the new loop's end, reset it.
-                    double currentPos = playbackPosition.load();
-                    if (currentPos > loopEndBeat)
-                        playbackPosition.store(loopStartBeat);
-                }
-            }
-        ));
-}
-
-
 
 void MainComponent::clearLoopRegion()
 {

@@ -38,6 +38,10 @@ add_library( ${BINARY_NAME}
     SHARED
 
     "../../../SoundFonts/Korg_Triton_Piano.sf2"
+    "../../../Source/MidiSchedulerAudioSource.cpp"
+    "../../../Source/MidiSchedulerAudioSource.h"
+    "../../../Source/SynthAudioSource.cpp"
+    "../../../Source/SynthAudioSource.h"
     "../../../Source/PianoRollComponent.h"
     "../../../Source/MainComponent.h"
     "../../../Source/Main.cpp"
@@ -2344,6 +2348,8 @@ add_library( ${BINARY_NAME}
 
 set_source_files_properties(
     "../../../SoundFonts/Korg_Triton_Piano.sf2"
+    "../../../Source/MidiSchedulerAudioSource.h"
+    "../../../Source/SynthAudioSource.h"
     "../../../Source/PianoRollComponent.h"
     "../../../Source/MainComponent.h"
     "../../../../../JUCE/modules/juce_audio_basics/audio_play_head/juce_AudioPlayHead.cpp"
