@@ -277,8 +277,9 @@ void MainComponent::processSegment(
     if (!device) return;
     
     const double sampleRate = device->getCurrentSampleRate();
-    juce::MidiBuffer midiBuffer;
-    
+    juce::MidiBuffer midiBuffer; // possibly a real-time issue here due to allocation in the audio thread but probably 
+                                 // not a problem due to the small size of the midi buffer
+
     // Pre-calculate event indices for this segment to avoid searching in the audio thread
     const int startEventIndex = findEventIndexForBeat(segmentStartBeat);
     const int endEventIndex = findEventIndexForBeat(segmentEndBeat);
