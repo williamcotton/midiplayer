@@ -43,7 +43,8 @@ void SynthAudioSource::getNextAudioBlock(
       (numSamples / currentSampleRate) / secondsPerBeat;
   const double currentBeat = playbackPosition.load();
 
-  juce::MidiBuffer midiBuffer;
+  juce::MidiBuffer midiBuffer; // possibly a real-time issue here due to allocation in the audio thread but probably 
+                               // not a problem due to the small size of the midi buffer
 
   // Find MIDI events between currentBeat and currentBeat + beatsPerBlock.
   int startEventIndex = findEventIndexForBeat(currentBeat);

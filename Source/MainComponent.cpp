@@ -184,111 +184,6 @@ void MainComponent::resized()
     pianoRoll.setBounds(area.reduced(paddingX, paddingY));
 }
 
-int MainComponent::findEventIndexForBeat(double beat) 
-{
-    int low = 0;
-    int high = midiSequence.getNumEvents();
-    while (low < high) {
-        int mid = (low + high) / 2;
-        double eventBeat = convertTicksToBeats(
-            midiSequence.getEventPointer(mid)->message.getTimeStamp());
-        if (eventBeat < beat)
-        low = mid + 1;
-        else
-        high = mid;
-    }
-    return low;
-}
-
-void MainComponent::processSegment(
-    const juce::AudioSourceChannelInfo& bufferInfo,
-    int segmentStartSample,
-    int segmentNumSamples,
-    double segmentStartBeat,
-    double segmentEndBeat)
-{
-    auto* device = audioDeviceManager.getCurrentAudioDevice();
-    if (!device) return;
-    
-    const double sampleRate = device->getCurrentSampleRate();
-    juce::MidiBuffer midiBuffer; // possibly a real-time issue here due to allocation in the audio thread but probably 
-                                 // not a problem due to the small size of the midi buffer
-
-    // Pre-calculate event indices for this segment to avoid searching in the audio thread
-    const int startEventIndex = findEventIndexForBeat(segmentStartBeat);
-    const int endEventIndex = findEventIndexForBeat(segmentEndBeat);
-    
-    // Process only events within our time window
-    for (int eventIndex = startEventIndex; eventIndex < endEventIndex && eventIndex < midiSequence.getNumEvents(); ++eventIndex)
-    {
-        auto* eventData = midiSequence.getEventPointer(eventIndex);
-        const double eventBeat = convertTicksToBeats(eventData->message.getTimeStamp());
-        
-        if (eventBeat >= segmentStartBeat && eventBeat < segmentEndBeat)
-        {
-            const double eventOffsetInBeats = eventBeat - segmentStartBeat;
-            const double eventTimeMs = convertBeatsToMilliseconds(eventOffsetInBeats);
-            const int eventSampleOffset = static_cast<int>((eventTimeMs * sampleRate) / 1000.0);
-            
-            if (eventSampleOffset >= 0 && eventSampleOffset < segmentNumSamples)
-            {
-                midiBuffer.addEvent(eventData->message, 
-                                  bufferInfo.startSample + segmentStartSample + eventSampleOffset);
-            }
-        }
-    }
-
-    // Render audio for the appropriate synth
-    if (useSF2Synth) {            
-        sf2Synth.renderNextBlock(*bufferInfo.buffer,
-                                midiBuffer,
-                                bufferInfo.startSample + segmentStartSample,
-                                segmentNumSamples);
-    } else {
-        synth.renderNextBlock(*bufferInfo.buffer,
-                             midiBuffer,
-                             bufferInfo.startSample + segmentStartSample,
-                             segmentNumSamples);
-    }
-}
-
-
-void MainComponent::reTriggerSustainedNotesAt(double boundaryBeat)
-{
-    // Define a small tolerance (in beats) to catch events that are just after the boundary
-    const double epsilon = 0.05;  // Adjust as needed
-    
-    // Iterate over all MIDI events
-    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
-    {
-        auto* evt = midiSequence.getEventPointer(i);
-        if (evt->message.isNoteOn() && evt->noteOffObject != nullptr)
-        {
-            double noteOnBeat = convertTicksToBeats(evt->message.getTimeStamp());
-            double noteOffBeat = convertTicksToBeats(evt->noteOffObject->message.getTimeStamp());
-            
-            // Allow a small tolerance on the noteOnBeat check
-            if (noteOnBeat <= (boundaryBeat + epsilon) && noteOffBeat > boundaryBeat)
-            {
-                if (useSF2Synth) {
-                    sf2Synth.noteOn(evt->message.getChannel(),
-                                  evt->message.getNoteNumber(),
-                                  evt->message.getVelocity() / 127.0f);
-                } else {
-                    synth.noteOn(evt->message.getChannel(),
-                               evt->message.getNoteNumber(),
-                               evt->message.getVelocity() / 127.0f);
-                }
-            }
-        }
-    }
-}
-
-bool MainComponent::isPositionInLoop(double beat) const
-{
-    return isLooping && beat >= loopStartBeat && beat < loopEndBeat;
-}
-
 void MainComponent::timerCallback() {
   // Instead of using a local playbackPosition member,
   // get the position from the scheduler.
@@ -531,16 +426,6 @@ void MainComponent::clearLoopRegion()
     loopCount = 0;
     isLooping = false;
     currentLoopIteration = 0;  // Reset loop iteration counter when clearing loop
-}
-
-int MainComponent::findEventAtTime(double timeStamp)
-{
-    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
-    {
-        if (midiSequence.getEventPointer(i)->message.getTimeStamp() >= timeStamp)
-            return i;
-    }
-    return midiSequence.getNumEvents();
 }
 
 bool MainComponent::keyPressed(const juce::KeyPress& key, Component* originatingComponent)
