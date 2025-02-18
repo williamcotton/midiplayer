@@ -32,22 +32,16 @@ SynthAudioSource::SynthAudioSource() {
   }
 
   // Set up our specific channel mappings
-  setupChannel(0, 0);      // Channel 0: Piano 1 (GM channel 1)
-  setupChannel(1, 0);      // Channel 1: Piano 2
-  setupChannel(2, 0);      // Channel 2: Piano 3
-  setupChannel(3, 33);     // Channel 3: Bass
-  setupChannel(4, 0);      // Channel 4: Piano
-  setupChannel(5, 0);      // Channel 5: Piano
-  setupChannel(6, 0);      // Channel 6: Piano
-  setupChannel(7, 0);      // Channel 7: Piano
-  setupChannel(8, 0);      // Channel 8: Piano
-  setupChannel(9, 228);    // Channel 9: Drums (GM channel 10)
-  setupChannel(10, 0);     // Channel 10: Piano
-  setupChannel(11, 0);     // Channel 11: Piano
-  setupChannel(12, 0);     // Channel 12: Piano
-  setupChannel(13, 0);     // Channel 13: Piano
-  setupChannel(14, 0);     // Channel 14: Piano
-  setupChannel(15, 0);     // Channel 15: Piano
+  // Initialize all melodic channels to Piano (program 0)
+  for (int channel = 0; channel < 16; ++channel) {
+    if (channel == 9) {
+      // Channel 10 (index 9) is always drums
+      setupChannel(channel, 228);    // Use drum kit sound
+    } else {
+      // All other channels default to Acoustic Grand Piano
+      setupChannel(channel, 0);      // Program 0 = Acoustic Grand Piano
+    }
+  }
 }
 
 void SynthAudioSource::setupChannel(int channel, int subsoundIndex) {
@@ -94,11 +88,27 @@ void SynthAudioSource::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     auto msg = metadata.getMessage();
     int channel = msg.getChannel() - 1; // MIDI channels are 1-based
     if (channel >= 0 && channel < 16) {
-      // Add debug logging for note-on messages
-      if (msg.isNoteOn()) {
-        DBG("Channel " + juce::String(channel) + " Note: " + juce::String(msg.getNoteNumber()) + 
-            " Velocity: " + juce::String(msg.getVelocity()));
+      // Add debug logging for all MIDI messages
+      DBG("MIDI Message - Channel: " + juce::String(channel) + 
+          " Type: " + (msg.isNoteOn() ? "Note On" : 
+                      msg.isNoteOff() ? "Note Off" : 
+                      msg.isController() ? "Controller" : 
+                      msg.isProgramChange() ? "Program Change" : "Other") +
+          " Data1: " + juce::String(msg.getRawData()[1]) +
+          " Data2: " + juce::String(msg.getRawData()[2]) +
+          " Subsound: " + juce::String(channelInfos[channel].subsoundIndex));
+
+      // Handle Program Change messages
+      if (msg.isProgramChange()) {
+        int programNumber = msg.getProgramChangeNumber();
+        // Don't change program on channel 9 (MIDI channel 10) as it's reserved for drums
+        if (channel != 9) {
+          setupChannel(channel, programNumber);
+          DBG("Program Change on channel " + juce::String(channel) + 
+              " to program " + juce::String(programNumber));
+        }
       }
+      
       channelBuffers[channel].addEvent(msg, metadata.samplePosition);
       activeChannels.set(channel);
     }
