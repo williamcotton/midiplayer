@@ -8,8 +8,8 @@ SynthAudioSource::SynthAudioSource() {
 
   // Load the SF2 sound from binary data.
   auto tempFile = juce::File::createTempFile(".sf2");
-  tempFile.replaceWithData(BinaryData::Korg_Triton_Piano_sf2,
-                           BinaryData::Korg_Triton_Piano_sf2Size);
+  tempFile.replaceWithData(BinaryData::gm_sf2,
+                           BinaryData::gm_sf2Size);
   sf2Sound.reset(new sfzero::SF2Sound(tempFile));
   sf2Sound->loadRegions();
   sf2Sound->loadSamples(

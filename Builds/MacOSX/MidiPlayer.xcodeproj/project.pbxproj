@@ -59,12 +59,12 @@
 		368AFCF9E529EB75249E1028 /* include_juce_graphics_Sheenbidi.c */ /* include_juce_graphics_Sheenbidi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = include_juce_graphics_Sheenbidi.c; path = ../../JuceLibraryCode/include_juce_graphics_Sheenbidi.c; sourceTree = SOURCE_ROOT; };
 		36C3FF5DFB1F9C72C9B2A019 /* include_juce_graphics_Harfbuzz.cpp */ /* include_juce_graphics_Harfbuzz.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_graphics_Harfbuzz.cpp; path = ../../JuceLibraryCode/include_juce_graphics_Harfbuzz.cpp; sourceTree = SOURCE_ROOT; };
 		36E6D3EB4E94D8C4E0CF0851 /* include_juce_audio_processors_ara.cpp */ /* include_juce_audio_processors_ara.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_audio_processors_ara.cpp; path = ../../JuceLibraryCode/include_juce_audio_processors_ara.cpp; sourceTree = SOURCE_ROOT; };
-		370CE15CF722DDA573E36D36 /* Korg_Triton_Piano.sf2 */ /* Korg_Triton_Piano.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file.sf2; name = Korg_Triton_Piano.sf2; path = ../../SoundFonts/Korg_Triton_Piano.sf2; sourceTree = SOURCE_ROOT; };
 		389CA584A24658775C4D9909 /* include_juce_gui_basics.mm */ /* include_juce_gui_basics.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_gui_basics.mm; path = ../../JuceLibraryCode/include_juce_gui_basics.mm; sourceTree = SOURCE_ROOT; };
 		3E9343DC778801811CD9F992 /* juce_gui_basics */ /* juce_gui_basics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_gui_basics; path = "~/JUCE/modules/juce_gui_basics"; sourceTree = "<absolute>"; };
 		44CF54CAE386AB05AA2D44DA /* CoreAudioKit.framework */ /* CoreAudioKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioKit.framework; path = System/Library/Frameworks/CoreAudioKit.framework; sourceTree = SDKROOT; };
 		4EC09B10DC0EA9AC1C14823B /* juce_events */ /* juce_events */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_events; path = "~/JUCE/modules/juce_events"; sourceTree = "<absolute>"; };
 		4FBBE13579A86609D7496949 /* juce_graphics */ /* juce_graphics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_graphics; path = "~/JUCE/modules/juce_graphics"; sourceTree = "<absolute>"; };
+		52D0A8C494775D17A66E2952 /* gm.sf2 */ /* gm.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file.sf2; name = gm.sf2; path = ../../SoundFonts/gm.sf2; sourceTree = SOURCE_ROOT; };
 		53A2F8A1F2708CB89B7C42EB /* include_juce_audio_basics.mm */ /* include_juce_audio_basics.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_basics.mm; path = ../../JuceLibraryCode/include_juce_audio_basics.mm; sourceTree = SOURCE_ROOT; };
 		57472EF66732D14CA4999E68 /* MidiSchedulerAudioSource.h */ /* MidiSchedulerAudioSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = MidiSchedulerAudioSource.h; path = ../../Source/MidiSchedulerAudioSource.h; sourceTree = SOURCE_ROOT; };
 		5A688A107FE3E1D4002F9F03 /* Cocoa.framework */ /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
@@ -244,7 +244,7 @@
 		C09AD5AC2B65574F806E238E /* SoundFonts */ = {
 			isa = PBXGroup;
 			children = (
-				370CE15CF722DDA573E36D36,
+				52D0A8C494775D17A66E2952,
 			);
 			name = SoundFonts;
 			sourceTree = "<group>";

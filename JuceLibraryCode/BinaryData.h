@@ -8,8 +8,8 @@
 
 namespace BinaryData
 {
-    extern const char*   Korg_Triton_Piano_sf2;
-    const int            Korg_Triton_Piano_sf2Size = 17092052;
+    extern const char*   gm_sf2;
+    const int            gm_sf2Size = 3208108;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
     const int namedResourceListSize = 1;

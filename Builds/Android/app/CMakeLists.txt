@@ -37,7 +37,7 @@ add_library( ${BINARY_NAME}
 
     SHARED
 
-    "../../../SoundFonts/Korg_Triton_Piano.sf2"
+    "../../../SoundFonts/gm.sf2"
     "../../../Source/MidiSchedulerAudioSource.cpp"
     "../../../Source/MidiSchedulerAudioSource.h"
     "../../../Source/SynthAudioSource.cpp"
@@ -2347,7 +2347,7 @@ add_library( ${BINARY_NAME}
 )
 
 set_source_files_properties(
-    "../../../SoundFonts/Korg_Triton_Piano.sf2"
+    "../../../SoundFonts/gm.sf2"
     "../../../Source/MidiSchedulerAudioSource.h"
     "../../../Source/SynthAudioSource.h"
     "../../../Source/PianoRollComponent.h"
