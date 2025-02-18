@@ -20,6 +20,7 @@ public:
         loopEndBeat = 0;
         loopCount = 0;
         isLooping = false;
+        ppq = 480;  // Default PPQ value
     }
 
     void paint(juce::Graphics& g) override
@@ -48,7 +49,7 @@ public:
         }
         
         // Convert to beats and round up to the nearest bar
-        double sequenceLength = lastTimestamp / 480.0; // Convert to beats
+        double sequenceLength = lastTimestamp / ppq; // Convert to beats using current PPQ
         double beatsPerBar = 4.0; // Assuming 4/4 time
         numBeats = static_cast<int>(std::ceil(sequenceLength / beatsPerBar) * beatsPerBar) + 4;
         
@@ -63,13 +64,13 @@ public:
             {
                 Note note;
                 note.noteNumber = event->message.getNoteNumber();
-                note.startBeat = event->message.getTimeStamp() / 480.0;
+                note.startBeat = event->message.getTimeStamp() / ppq;
                 note.velocity = event->message.getVelocity();
                 
                 auto noteOffEvent = event->noteOffObject;
                 if (noteOffEvent != nullptr)
                 {
-                    note.endBeat = noteOffEvent->message.getTimeStamp() / 480.0;
+                    note.endBeat = noteOffEvent->message.getTimeStamp() / ppq;
                 }
                 else
                 {
@@ -126,6 +127,8 @@ public:
         // Just trigger a repaint to update the position line
         contentComponent.repaint();
     }
+
+    void setPPQ(int ppqValue) { ppq = ppqValue; }
 
 private:
     struct Note
@@ -247,6 +250,7 @@ private:
     int loopCount;
     bool isLooping;
     double currentBeatPosition = 0.0;
+    int ppq = 480;  // Default PPQ value
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollComponent)
 };

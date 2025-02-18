@@ -271,6 +271,20 @@ void MainComponent::loadMidiFile()
                     if (newNumTracks > 0)
                     {
                         try {
+                            // Get the time division (PPQ) from the MIDI file
+                            auto timeDivision = safeThis->midiFile.getTimeFormat();
+                            if (timeDivision > 0) {
+                                // Positive values indicate PPQ (ticks per quarter note)
+                                DBG("MIDI file uses PPQ timing: " + juce::String(timeDivision) + " ticks per quarter note");
+                                safeThis->midiSchedulerAudioSource->setPPQ(timeDivision);
+                                safeThis->pianoRoll.setPPQ(timeDivision);
+                            } else {
+                                // Negative values indicate SMPTE timing (not supported yet)
+                                DBG("Warning: SMPTE timing not supported, defaulting to 480 PPQ");
+                                safeThis->midiSchedulerAudioSource->setPPQ(480);
+                                safeThis->pianoRoll.setPPQ(480);
+                            }
+
                             DBG("Getting first track...");
                             safeThis->midiSequence = *safeThis->midiFile.getTrack(0);
                             DBG("First track copied, events: " + juce::String(safeThis->midiSequence.getNumEvents()));

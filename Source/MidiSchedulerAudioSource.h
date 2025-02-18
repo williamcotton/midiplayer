@@ -27,6 +27,7 @@ public:
   void startPlayback();
   void stopPlayback();
   void setTempo(double newTempo);
+  void setPPQ(int ppqValue) { ppq = ppqValue; }
 
   // Loop settings (in beats). For a valid loop, endBeat must be greater than
   // startBeat. loops: the number of times to loop.
@@ -47,6 +48,7 @@ private:
   std::atomic<double> tempo{120.0};          // BPM
   double currentSampleRate = 44100.0;
   bool isPlaying = false;
+  int ppq = 480;  // Pulses Per Quarter note, default 480
 
   // Looping variables.
   bool isLooping = false;
@@ -56,7 +58,7 @@ private:
   int currentLoopIteration = 0;
 
   // Helper: convert ticks (assuming 480 PPQ) to beats.
-  inline double ticksToBeats(double ticks) const { return ticks / 480.0; }
+  inline double ticksToBeats(double ticks) const { return ticks / ppq; }
 
   // Helper: find the first MIDI event at or after a given beat.
   int findEventIndexForBeat(double beat) {
