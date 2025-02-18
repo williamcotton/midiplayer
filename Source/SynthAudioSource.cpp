@@ -8,12 +8,13 @@ SynthAudioSource::SynthAudioSource() {
                           BinaryData::Korg_Triton_Piano_sf2Size);
 
   // Initialize the shared sound
-  sharedSF2Sound = std::make_unique<sfzero::SF2Sound>(tempFile);
-  sharedSF2Sound->loadRegions();
-  sharedSF2Sound->loadSamples(nullptr);
+  sf2Sound = new sfzero::SF2Sound(tempFile);
+  sf2Sound->loadRegions();
+  sf2Sound->loadSamples(nullptr);
 
   // Initialize synths for all channels
   for (int channel = 0; channel < 16; ++channel) {
+    // Create synth instance
     channelSynths[channel] = std::make_unique<sfzero::Synth>();
     
     // Add voices to each synth
@@ -23,14 +24,8 @@ SynthAudioSource::SynthAudioSource() {
     
     // Initialize with default preset (0)
     channelPresets[channel] = 0;
-  }
-  
-  // Apply initial presets
-  for (int channel = 0; channel < 16; ++channel) {
-    if (auto* synth = channelSynths[channel].get()) {
-      sharedSF2Sound->useSubsound(channelPresets[channel]);
-      synth->addSound(sharedSF2Sound.get());
-    }
+    sf2Sound->useSubsound(0);
+    channelSynths[channel]->addSound(sf2Sound.get());
   }
   
   tempFile.deleteFile();
@@ -91,6 +86,11 @@ void SynthAudioSource::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
       // Clear mixing buffer (avoiding reallocation)
       mixingBuffer.clear();
       
+      // Set the correct preset for this channel
+      if (sf2Sound) {
+        sf2Sound->useSubsound(channelPresets[channel]);
+      }
+      
       // Render this channel's synth
       channelSynths[channel]->renderNextBlock(mixingBuffer, 
                                             channelMidiBuffers[channel], 
@@ -124,16 +124,12 @@ void SynthAudioSource::setChannelPreset(int channel, int presetIndex) {
     // Stop any playing notes on this channel
     if (auto* synth = channelSynths[channel].get()) {
       synth->allNotesOff(0, true);
-    }
-    
-    // Reapply all channel presets to ensure correct state
-    for (int ch = 0; ch < 16; ++ch) {
-      if (auto* synth = channelSynths[ch].get()) {
+      
+      // Update the preset
+      if (sf2Sound) {
         synth->clearSounds();
-        if (sharedSF2Sound) {
-          sharedSF2Sound->useSubsound(channelPresets[ch]);
-          synth->addSound(sharedSF2Sound.get());
-        }
+        sf2Sound->useSubsound(presetIndex);
+        synth->addSound(sf2Sound.get());
       }
     }
   }

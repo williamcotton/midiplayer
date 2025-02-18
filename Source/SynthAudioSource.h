@@ -25,7 +25,7 @@ public:
                       int numSamples);
 
   // Get the shared SF2 sound instance
-  sfzero::SF2Sound *getSF2Sound() const { return sharedSF2Sound.get(); }
+  sfzero::SF2Sound *getSF2Sound() const { return sf2Sound.get(); }
   
   // Get a specific channel's synth
   sfzero::Synth *getSF2Synth(int channel = 0) { 
@@ -38,8 +38,8 @@ public:
   void setChannelPreset(int channel, int presetIndex);
 
 private:
-  // Single shared SF2 sound instance
-  std::unique_ptr<sfzero::SF2Sound> sharedSF2Sound;
+  // Single SF2Sound instance shared across all channels
+  juce::ReferenceCountedObjectPtr<sfzero::SF2Sound> sf2Sound;
   
   // Separate synth instances per channel
   std::array<std::unique_ptr<sfzero::Synth>, 16> channelSynths;
