@@ -32,11 +32,22 @@ SynthAudioSource::SynthAudioSource() {
   }
 
   // Set up our specific channel mappings
-  setupChannel(0, 228);   // Channel 0: Power Kit for drums
-  setupChannel(1, 33);     // Channel 1: Acoustic Grand Piano
-  setupChannel(2, 0);   // Drums (Taiko Drum - or try 118 for Synth Drum)
-  setupChannel(3, 0);     // Additional Piano if needed
-  setupChannel(4, 0);     // Additional Piano if needed
+  setupChannel(0, 0);      // Channel 0: Piano 1 (GM channel 1)
+  setupChannel(1, 0);      // Channel 1: Piano 2
+  setupChannel(2, 0);      // Channel 2: Piano 3
+  setupChannel(3, 33);     // Channel 3: Bass
+  setupChannel(4, 0);      // Channel 4: Piano
+  setupChannel(5, 0);      // Channel 5: Piano
+  setupChannel(6, 0);      // Channel 6: Piano
+  setupChannel(7, 0);      // Channel 7: Piano
+  setupChannel(8, 0);      // Channel 8: Piano
+  setupChannel(9, 228);    // Channel 9: Drums (GM channel 10)
+  setupChannel(10, 0);     // Channel 10: Piano
+  setupChannel(11, 0);     // Channel 11: Piano
+  setupChannel(12, 0);     // Channel 12: Piano
+  setupChannel(13, 0);     // Channel 13: Piano
+  setupChannel(14, 0);     // Channel 14: Piano
+  setupChannel(15, 0);     // Channel 15: Piano
 }
 
 void SynthAudioSource::setupChannel(int channel, int subsoundIndex) {
