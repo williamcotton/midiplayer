@@ -25,35 +25,6 @@ MainComponent::MainComponent()
   // Create our basic SynthAudioSource (which now does no scheduling).
   synthAudioSource = std::make_unique<SynthAudioSource>();
 
-  if (synthAudioSource != nullptr) {
-    if (auto *sound = synthAudioSource->getSF2Sound()) {
-      presetBox.setTextWhenNothingSelected("Select Preset");
-      presetBox.clear();
-      for (int i = 0; i < sound->numSubsounds(); ++i) {
-        presetBox.addItem(sound->subsoundName(i),
-                          i + 1); // ComboBox items are 1-indexed
-      }
-
-      // Set initial preset if available
-      if (presetBox.getNumItems() > 0) {
-        presetBox.setSelectedId(1, juce::dontSendNotification);
-        sound->useSubsound(0);
-      }
-
-      // Add an onChange callback for when the user selects a new preset.
-      presetBox.onChange = [this, sound]() {
-        if (presetBox.getSelectedId() > 0) {
-          // Stop any playing notes from the synth.
-          synthAudioSource->getSF2Synth()->allNotesOff(0, true);
-          // Change the preset (subsound) – subtract 1 because the combo box is
-          // 1-indexed.
-          sound->useSubsound(presetBox.getSelectedId() - 1);
-          DBG("Changed to preset: " + presetBox.getText());
-        }
-      };
-    }
-  }
-
   // Create the MidiSchedulerAudioSource, passing the synth.
   midiSchedulerAudioSource =
       std::make_unique<MidiSchedulerAudioSource>(synthAudioSource.get());
@@ -70,8 +41,9 @@ MainComponent::MainComponent()
   addAndMakeVisible(stopButton);
   addAndMakeVisible(setLoopButton);
   addAndMakeVisible(clearLoopButton);
-  addAndMakeVisible(presetBox);
   addAndMakeVisible(pianoRoll);
+  addAndMakeVisible(tempoSlider);
+  addAndMakeVisible(tempoLabel);
 
   // Set button text.
   loadButton.setButtonText("Load MIDI File");
@@ -88,9 +60,6 @@ MainComponent::MainComponent()
   clearLoopButton.onClick = [this]() { clearLoopRegion(); };
 
   //--- Tempo Slider & Label Setup ---
-  addAndMakeVisible(tempoSlider);
-  addAndMakeVisible(tempoLabel);
-
   tempoLabel.setText("Tempo", juce::dontSendNotification);
   tempoSlider.setRange(30.0, 300.0, 1.0);
   tempoSlider.setValue(120.0, juce::dontSendNotification);
@@ -106,8 +75,18 @@ MainComponent::MainComponent()
     // This code executes on the message thread.
     playButton.setEnabled(true);
     stopButton.setEnabled(false);
-    // Optionally update any other UI state.
   };
+
+  // Set up initial channel presets in the synth
+  if (synthAudioSource != nullptr) {
+    if (synthAudioSource->getSF2Sound()) {
+      // Set up some default channel mappings
+      synthAudioSource->setChannelPreset(0, 0);
+      synthAudioSource->setChannelPreset(1, 0);
+      synthAudioSource->setChannelPreset(2, 0);
+      synthAudioSource->setChannelPreset(9, 0);
+    }
+  }
 
   // Set the size of the MainComponent.
   setSize(800, 600);
@@ -125,25 +104,24 @@ MainComponent::MainComponent()
   loopEndBeat = 0.0;
   loopCount = 0;
   isLooping = false;
-
 }
 
-  MainComponent::~MainComponent() {
-    // First, disconnect the audio callback.
-    audioSourcePlayer.setSource(nullptr);
+MainComponent::~MainComponent() {
+  // First, disconnect the audio callback.
+  audioSourcePlayer.setSource(nullptr);
 
-    // Remove all inputs from the mixer.
-    if (audioMixerSource)
-      audioMixerSource->removeAllInputs();
+  // Remove all inputs from the mixer.
+  if (audioMixerSource)
+    audioMixerSource->removeAllInputs();
 
-    // Remove our audio callback from the audio device manager.
-    audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
+  // Remove our audio callback from the audio device manager.
+  audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
 
-    // Remove ourselves as a key listener.
-    removeKeyListener(this);
+  // Remove ourselves as a key listener.
+  removeKeyListener(this);
 
-    // (Any additional cleanup for MIDI, SF2, etc., can be added here.)
-  }
+  // (Any additional cleanup for MIDI, SF2, etc., can be added here.)
+}
 
 void MainComponent::paint(juce::Graphics& g)
 {
@@ -167,20 +145,22 @@ void MainComponent::resized()
     }
 #endif
 
+    // Top row: transport controls
     auto topControls = area.removeFromTop(buttonHeight);
     loadButton.setBounds(topControls.removeFromLeft(120).reduced(paddingX, paddingY));
     playButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
     stopButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
-    presetBox.setBounds(topControls.removeFromLeft(200).reduced(paddingX, paddingY));  // Add preset box
-    tempoLabel.setBounds(topControls.removeFromLeft(100).reduced(paddingX, paddingY));
     
-    auto loopControls = area.removeFromTop(buttonHeight);
-    setLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(paddingX, paddingY));
-    clearLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(paddingX, paddingY));
+    // Second row: loop controls and tempo
+    auto controlRow = area.removeFromTop(buttonHeight);
+    setLoopButton.setBounds(controlRow.removeFromLeft(100).reduced(paddingX, paddingY));
+    clearLoopButton.setBounds(controlRow.removeFromLeft(100).reduced(paddingX, paddingY));
     
-    auto tempoControls = loopControls.removeFromLeft(250);
-    tempoSlider.setBounds(tempoControls.reduced(paddingX, paddingY));
+    auto tempoArea = controlRow.removeFromLeft(300);
+    tempoLabel.setBounds(tempoArea.removeFromLeft(60).reduced(paddingX, paddingY));
+    tempoSlider.setBounds(tempoArea.reduced(paddingX, paddingY));
     
+    // Piano roll takes remaining space
     pianoRoll.setBounds(area.reduced(paddingX, paddingY));
 }
 
@@ -417,15 +397,21 @@ void MainComponent::setupLoopRegion() {
       }));
 }
 
-void MainComponent::clearLoopRegion()
-{
-    pianoRoll.setLoopRegion(0, 0, 0);
-
-    loopStartBeat = 0;
-    loopEndBeat = 0;
+void MainComponent::clearLoopRegion() {
+    // Reset loop-related variables
+    loopStartBeat = 0.0;
+    loopEndBeat = 0.0;
     loopCount = 0;
     isLooping = false;
-    currentLoopIteration = 0;  // Reset loop iteration counter when clearing loop
+    currentLoopIteration = 0;
+
+    // Update the piano roll display
+    pianoRoll.setLoopRegion(0.0, 0.0, 0);
+
+    // Update the scheduler
+    if (midiSchedulerAudioSource != nullptr) {
+        midiSchedulerAudioSource->setLoopRegion(0.0, 0.0, 0);
+    }
 }
 
 bool MainComponent::keyPressed(const juce::KeyPress& key, Component* originatingComponent)

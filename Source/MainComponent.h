@@ -43,14 +43,13 @@ private:
   // File chooser
   std::unique_ptr<juce::FileChooser> fileChooser;
 
-  // Audio setup: We still have an AudioDeviceManager and AudioSourcePlayer.
+  // Audio setup
   juce::AudioDeviceManager audioDeviceManager;
   juce::AudioSourcePlayer audioSourcePlayer;
 
-  // NEW: Mixer and our custom SynthAudioSource (defined in a separate file)
+  // Audio sources
   std::unique_ptr<juce::MixerAudioSource> audioMixerSource;
-  std::unique_ptr<class SynthAudioSource>
-      synthAudioSource; // Forward-declared SynthAudioSource
+  std::unique_ptr<class SynthAudioSource> synthAudioSource;
   std::unique_ptr<MidiSchedulerAudioSource> midiSchedulerAudioSource;
 
   // GUI components
@@ -59,12 +58,11 @@ private:
   juce::TextButton stopButton;
   juce::TextButton setLoopButton;
   juce::TextButton clearLoopButton;
-  juce::ComboBox presetBox; // For preset selection
   PianoRollComponent pianoRoll;
   juce::Slider tempoSlider;
   juce::Label tempoLabel;
 
-  // MIDI handling and playback state (keeping these as-is for now)
+  // MIDI handling and playback state
   juce::MidiFile midiFile;
   juce::MidiMessageSequence midiSequence;
   juce::Synthesiser synth;

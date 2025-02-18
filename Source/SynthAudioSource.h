@@ -10,30 +10,51 @@ public:
   ~SynthAudioSource() override;
 
   void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
-  void
-  getNextAudioBlock(const juce::AudioSourceChannelInfo &bufferToFill) override;
+  void getNextAudioBlock(const juce::AudioSourceChannelInfo &bufferToFill) override;
   void releaseResources() override;
 
-  // Methods to control MIDI playback.
+  // Methods to control MIDI playback
   void setMidiSequence(const juce::MidiMessageSequence &sequence);
   void startPlayback();
   void stopPlayback();
   void setTempo(double newTempo);
 
-  // Forward MIDI rendering to the underlying SF2 synth.
+  // Forward MIDI rendering to the underlying SF2 synth
   void renderNextBlock(juce::AudioBuffer<float> &outputBuffer,
-                       const juce::MidiBuffer &midiBuffer, int startSample,
-                       int numSamples);
+                      const juce::MidiBuffer &midiBuffer, int startSample,
+                      int numSamples);
 
-  sfzero::SF2Sound *getSF2Sound() const { return sf2Sound.get(); }
-  sfzero::Synth *getSF2Synth() { return &sf2Synth; }
+  // Get the shared SF2 sound instance
+  sfzero::SF2Sound *getSF2Sound() const { return sharedSF2Sound.get(); }
+  
+  // Get a specific channel's synth
+  sfzero::Synth *getSF2Synth(int channel = 0) { 
+    if (channel >= 0 && channel < 16)
+      return channelSynths[channel].get(); 
+    return nullptr;
+  }
+
+  // Set preset for a specific channel
+  void setChannelPreset(int channel, int presetIndex);
 
 private:
-  // Our SF2 synthesizer and sound.
-  sfzero::Synth sf2Synth;
-  std::unique_ptr<sfzero::SF2Sound> sf2Sound;
+  // Single shared SF2 sound instance
+  std::unique_ptr<sfzero::SF2Sound> sharedSF2Sound;
+  
+  // Separate synth instances per channel
+  std::array<std::unique_ptr<sfzero::Synth>, 16> channelSynths;
+  
+  // Pre-allocated mixing resources
+  juce::AudioBuffer<float> mixingBuffer;
+  std::array<juce::MidiBuffer, 16> channelMidiBuffers;
+  
+  // Track active channels
+  std::bitset<16> activeChannels;
+  
+  // Cache channel count
+  int numChannels = 2;
 
-  // Our MIDI playback data.
+  // MIDI playback data
   juce::MidiMessageSequence midiSequence;
   std::atomic<double> playbackPosition{0.0};
   double tempo = 120.0; // BPM
