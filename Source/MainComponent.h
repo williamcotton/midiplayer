@@ -43,15 +43,26 @@ private:
   // File chooser
   std::unique_ptr<juce::FileChooser> fileChooser;
 
-  // Audio setup: We still have an AudioDeviceManager and AudioSourcePlayer.
+  // MIDI handling and playback state
+  juce::MidiFile midiFile;
+  juce::MidiMessageSequence midiSequence;
+  bool isPlaying = false;
+  int currentEvent = 0;
+  std::atomic<double> playbackPosition{0.0};
+  double lastTime = 0.0;
+  int currentLoopIteration = 0;
+  double tempo = 120.0; // BPM
+  double loopStartBeat = 0.0, loopEndBeat = 0.0;
+  int loopCount = 0;
+  bool isLooping = false;
+
+  // Audio setup
   juce::AudioDeviceManager audioDeviceManager;
   juce::AudioSourcePlayer audioSourcePlayer;
-
-  // NEW: Mixer and our custom SynthAudioSource (defined in a separate file)
   std::unique_ptr<juce::MixerAudioSource> audioMixerSource;
-  std::unique_ptr<class SynthAudioSource>
-      synthAudioSource; // Forward-declared SynthAudioSource
+  std::unique_ptr<SynthAudioSource> synthAudioSource;
   std::unique_ptr<MidiSchedulerAudioSource> midiSchedulerAudioSource;
+  juce::AudioFormatManager formatManager;
 
   // GUI components
   juce::TextButton loadButton;
@@ -63,26 +74,6 @@ private:
   PianoRollComponent pianoRoll;
   juce::Slider tempoSlider;
   juce::Label tempoLabel;
-
-  // MIDI handling and playback state (keeping these as-is for now)
-  juce::MidiFile midiFile;
-  juce::MidiMessageSequence midiSequence;
-  juce::Synthesiser synth;
-  bool isPlaying = false;
-  int currentEvent = 0;
-  std::atomic<double> playbackPosition{0.0};
-  double lastTime = 0.0;
-  int currentLoopIteration = 0;
-  double tempo = 120.0; // BPM
-  double loopStartBeat = 0.0, loopEndBeat = 0.0;
-  int loopCount = 0;
-  bool isLooping = false;
-
-  // SF2 synth components (if still used elsewhere)
-  sfzero::Synth sf2Synth;
-  bool useSF2Synth = true;
-  juce::ReferenceCountedObjectPtr<sfzero::SF2Sound> sf2Sound;
-  juce::AudioFormatManager formatManager;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

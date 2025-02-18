@@ -22,7 +22,7 @@ MainComponent::MainComponent()
   // Create a MixerAudioSource.
   audioMixerSource = std::make_unique<juce::MixerAudioSource>();
 
-  // Create our basic SynthAudioSource (which now does no scheduling).
+  // Create our multi-channel SynthAudioSource
   synthAudioSource = std::make_unique<SynthAudioSource>();
 
   if (synthAudioSource != nullptr) {
@@ -43,11 +43,8 @@ MainComponent::MainComponent()
       // Add an onChange callback for when the user selects a new preset.
       presetBox.onChange = [this, sound]() {
         if (presetBox.getSelectedId() > 0) {
-          // Stop any playing notes from the synth.
-          synthAudioSource->getSF2Synth()->allNotesOff(0, true);
-          // Change the preset (subsound) – subtract 1 because the combo box is
-          // 1-indexed.
-          sound->useSubsound(presetBox.getSelectedId() - 1);
+          // Set up channel 0 (piano) with the selected preset
+          synthAudioSource->setupChannel(0, presetBox.getSelectedId() - 1);
           DBG("Changed to preset: " + presetBox.getText());
         }
       };
@@ -125,25 +122,24 @@ MainComponent::MainComponent()
   loopEndBeat = 0.0;
   loopCount = 0;
   isLooping = false;
-
 }
 
-  MainComponent::~MainComponent() {
-    // First, disconnect the audio callback.
-    audioSourcePlayer.setSource(nullptr);
+MainComponent::~MainComponent() {
+  // First, disconnect the audio callback.
+  audioSourcePlayer.setSource(nullptr);
 
-    // Remove all inputs from the mixer.
-    if (audioMixerSource)
-      audioMixerSource->removeAllInputs();
+  // Remove all inputs from the mixer.
+  if (audioMixerSource)
+    audioMixerSource->removeAllInputs();
 
-    // Remove our audio callback from the audio device manager.
-    audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
+  // Remove our audio callback from the audio device manager.
+  audioDeviceManager.removeAudioCallback(&audioSourcePlayer);
 
-    // Remove ourselves as a key listener.
-    removeKeyListener(this);
+  // Remove ourselves as a key listener.
+  removeKeyListener(this);
 
-    // (Any additional cleanup for MIDI, SF2, etc., can be added here.)
-  }
+  // (Any additional cleanup for MIDI, SF2, etc., can be added here.)
+}
 
 void MainComponent::paint(juce::Graphics& g)
 {
@@ -355,15 +351,8 @@ void MainComponent::loadMidiFile()
 
 void MainComponent::playMidiFile() {
   if (midiSequence.getNumEvents() > 0) {
-    // Stop any lingering notes.
-    if (useSF2Synth)
-      sf2Synth.allNotesOff(0, true);
-    else
-      synth.allNotesOff(0, true);
-
     // Forward the MIDI sequence and tempo to the scheduler.
     midiSchedulerAudioSource->setMidiSequence(midiSequence);
-    // midiSchedulerAudioSource->setTempo(tempo);
     midiSchedulerAudioSource->startPlayback();
 
     isPlaying = true;
