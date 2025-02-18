@@ -21,9 +21,16 @@ SynthAudioSource::SynthAudioSource() {
       channelSynths[channel]->addVoice(new sfzero::Voice());
     }
     
-    // Add the shared sound to each synth
-    channelSynths[channel]->clearSounds();
-    channelSynths[channel]->addSound(sharedSF2Sound.get());
+    // Initialize with default preset (0)
+    channelPresets[channel] = 0;
+  }
+  
+  // Apply initial presets
+  for (int channel = 0; channel < 16; ++channel) {
+    if (auto* synth = channelSynths[channel].get()) {
+      sharedSF2Sound->useSubsound(channelPresets[channel]);
+      synth->addSound(sharedSF2Sound.get());
+    }
   }
   
   tempFile.deleteFile();
@@ -111,14 +118,23 @@ void SynthAudioSource::releaseResources() {
 
 void SynthAudioSource::setChannelPreset(int channel, int presetIndex) {
   if (channel >= 0 && channel < 16) {
+    // Store the preset selection for this channel
+    channelPresets[channel] = presetIndex;
+    
     // Stop any playing notes on this channel
     if (auto* synth = channelSynths[channel].get()) {
       synth->allNotesOff(0, true);
     }
     
-    // Update preset
-    if (sharedSF2Sound) {
-      sharedSF2Sound->useSubsound(presetIndex);
+    // Reapply all channel presets to ensure correct state
+    for (int ch = 0; ch < 16; ++ch) {
+      if (auto* synth = channelSynths[ch].get()) {
+        synth->clearSounds();
+        if (sharedSF2Sound) {
+          sharedSF2Sound->useSubsound(channelPresets[ch]);
+          synth->addSound(sharedSF2Sound.get());
+        }
+      }
     }
   }
 }

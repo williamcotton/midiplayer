@@ -44,6 +44,9 @@ private:
   // Separate synth instances per channel
   std::array<std::unique_ptr<sfzero::Synth>, 16> channelSynths;
   
+  // Track preset per channel
+  std::array<int, 16> channelPresets{};
+  
   // Pre-allocated mixing resources
   juce::AudioBuffer<float> mixingBuffer;
   std::array<juce::MidiBuffer, 16> channelMidiBuffers;
