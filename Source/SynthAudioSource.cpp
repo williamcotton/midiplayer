@@ -11,6 +11,12 @@ SynthAudioSource::SynthAudioSource() {
   sf2Sound->loadSamples(nullptr);
   tempFile.deleteFile();
 
+  // Print out all available subsounds
+  DBG("Available Subsounds:");
+  for (int i = 0; i < sf2Sound->numSubsounds(); ++i) {
+    DBG(juce::String(i) + ": " + sf2Sound->subsoundName(i));
+  }
+
   // Initialize synths for all channels
   for (int channel = 0; channel < 16; ++channel) {
     channelInfos[channel].synth = std::make_unique<sfzero::Synth>();
@@ -26,9 +32,11 @@ SynthAudioSource::SynthAudioSource() {
   }
 
   // Set up our specific channel mappings
-  setupChannel(0, 0);    // Piano on channel 0
-  setupChannel(1, 228);  // Drums on channel 1
-  setupChannel(2, 33);   // Bass on channel 2
+  setupChannel(0, 228);   // Channel 0: Power Kit for drums
+  setupChannel(1, 33);     // Channel 1: Acoustic Grand Piano
+  setupChannel(2, 0);   // Drums (Taiko Drum - or try 118 for Synth Drum)
+  setupChannel(3, 0);     // Additional Piano if needed
+  setupChannel(4, 0);     // Additional Piano if needed
 }
 
 void SynthAudioSource::setupChannel(int channel, int subsoundIndex) {
@@ -75,6 +83,11 @@ void SynthAudioSource::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     auto msg = metadata.getMessage();
     int channel = msg.getChannel() - 1; // MIDI channels are 1-based
     if (channel >= 0 && channel < 16) {
+      // Add debug logging for note-on messages
+      if (msg.isNoteOn()) {
+        DBG("Channel " + juce::String(channel) + " Note: " + juce::String(msg.getNoteNumber()) + 
+            " Velocity: " + juce::String(msg.getVelocity()));
+      }
       channelBuffers[channel].addEvent(msg, metadata.samplePosition);
       activeChannels.set(channel);
     }
