@@ -191,6 +191,17 @@ void SynthAudioSource::startPlayback() {
 
 void SynthAudioSource::stopPlayback() { isPlaying = false; }
 
+void SynthAudioSource::stopAllNotes() {
+  // Stop all notes on all channels
+  for (auto& info : channelInfos) {
+    if (info.synth) {
+      info.synth->allNotesOff(0, true);
+    }
+  }
+  // Clear any active channel flags
+  activeChannels.reset();
+}
+
 void SynthAudioSource::setTempo(double newTempo) { tempo = newTempo; }
 
 int SynthAudioSource::findEventIndexForBeat(double beat) {

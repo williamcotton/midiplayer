@@ -199,6 +199,13 @@ void MainComponent::timerCallback() {
 void MainComponent::loadMidiFile()
 {
     DBG("Starting loadMidiFile()");
+    
+    // Stop any currently playing notes
+    if (synthAudioSource) {
+        synthAudioSource->stopPlayback();
+        synthAudioSource->stopAllNotes();
+    }
+    
     auto fileChooserFlags =
         juce::FileBrowserComponent::openMode |
         juce::FileBrowserComponent::canSelectFiles;

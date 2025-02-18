@@ -31,6 +31,9 @@ public:
   // Helper to set up a channel with a specific subsound
   void setupChannel(int channel, int subsoundIndex);
 
+  // Stop all notes on all channels
+  void stopAllNotes();
+
 private:
   // Our SF2 synthesizer and sound.
   struct ChannelInfo {
