@@ -21,6 +21,9 @@ public:
         loopCount = 0;
         isLooping = false;
         ppq = 480;  // Default PPQ value
+        timeSignatureNumerator = 4;
+        timeSignatureDenominator = 4;
+        beatsPerBar = 4.0;  // Default 4/4 time
     }
 
     void paint(juce::Graphics& g) override
@@ -50,7 +53,6 @@ public:
         
         // Convert to beats and round up to the nearest bar
         double sequenceLength = lastTimestamp / ppq; // Convert to beats using current PPQ
-        double beatsPerBar = 4.0; // Assuming 4/4 time
         numBeats = static_cast<int>(std::ceil(sequenceLength / beatsPerBar) * beatsPerBar) + 4;
         
         DBG("PianoRoll: Last timestamp is " + juce::String(lastTimestamp) + " ticks, " + 
@@ -130,6 +132,13 @@ public:
 
     void setPPQ(int ppqValue) { ppq = ppqValue; }
 
+    void setTimeSignature(int numerator, int denominator) {
+        timeSignatureNumerator = numerator;
+        timeSignatureDenominator = denominator;
+        beatsPerBar = static_cast<double>(timeSignatureNumerator) * (4.0 / static_cast<double>(timeSignatureDenominator));
+        repaint();
+    }
+
 private:
     struct Note
     {
@@ -149,7 +158,6 @@ private:
 
         void paint(juce::Graphics& g) override
         {
-            // auto width = getWidth();
             auto height = getHeight();
             
             // Constants
@@ -158,11 +166,18 @@ private:
             g.fillAll(juce::Colours::black);
 
             // Draw grid first
-            g.setColour(juce::Colours::darkgrey);
             for (int beat = 0; beat <= owner.numBeats; ++beat)
             {
                 float x = keyWidth + static_cast<float>(beat * owner.pixelsPerBeat);
-                g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
+                
+                // Draw bar lines darker and thicker
+                if (beat % static_cast<int>(owner.beatsPerBar) == 0) {
+                    g.setColour(juce::Colours::grey);
+                    g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
+                } else {
+                    g.setColour(juce::Colours::darkgrey.darker());
+                    g.drawVerticalLine(static_cast<int>(x), 0.0f, static_cast<float>(height));
+                }
             }
 
             // Draw loop region if active
@@ -251,6 +266,9 @@ private:
     bool isLooping;
     double currentBeatPosition = 0.0;
     int ppq = 480;  // Default PPQ value
+    int timeSignatureNumerator = 4;
+    int timeSignatureDenominator = 4;
+    double beatsPerBar = 4.0;  // Default 4/4 time
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollComponent)
 };

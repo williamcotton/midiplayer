@@ -41,7 +41,7 @@ MainComponent::MainComponent()
       }
 
       // Add an onChange callback for when the user selects a new preset.
-      presetBox.onChange = [this, sound]() {
+      presetBox.onChange = [this]() {
         if (presetBox.getSelectedId() > 0) {
           // Set up channel 0 (piano) with the selected preset
           synthAudioSource->setupChannel(0, presetBox.getSelectedId() - 1);
@@ -60,6 +60,37 @@ MainComponent::MainComponent()
 
   // Set the mixer as the source for the AudioSourcePlayer.
   audioSourcePlayer.setSource(audioMixerSource.get());
+
+  //--- Tempo Slider & Label Setup ---
+  addAndMakeVisible(tempoSlider);
+  addAndMakeVisible(tempoLabel);
+
+  tempoLabel.setText("Tempo", juce::dontSendNotification);
+  tempoSlider.setRange(30.0, 300.0, 1.0);
+  tempoSlider.setValue(120.0, juce::dontSendNotification);
+  tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
+  tempoSlider.onValueChange = [this]() {
+    double newTempo = tempoSlider.getValue();
+    tempo = newTempo; // Update our member variable
+    midiSchedulerAudioSource->setTempo(newTempo);
+    DBG("Manual tempo change to: " + juce::String(newTempo) + " BPM");
+  };
+
+  // Set up tempo change callback
+  midiSchedulerAudioSource->onTempoChanged = [this](double newTempo) {
+    DBG("Received tempo change callback: " + juce::String(newTempo) + " BPM");
+    juce::MessageManager::callAsync([this, newTempo]() {
+      DBG("Setting tempo slider to: " + juce::String(newTempo) + " BPM");
+      tempoSlider.setValue(newTempo, juce::sendNotification);
+    });
+  };
+
+  midiSchedulerAudioSource->onPlaybackStopped = [this]() {
+    // This code executes on the message thread.
+    playButton.setEnabled(true);
+    stopButton.setEnabled(false);
+    // Optionally update any other UI state.
+  };
 
   //--- GUI Setup ---
   addAndMakeVisible(loadButton);
@@ -83,28 +114,6 @@ MainComponent::MainComponent()
   stopButton.onClick = [this]() { stopMidiFile(); };
   setLoopButton.onClick = [this]() { setupLoopRegion(); };
   clearLoopButton.onClick = [this]() { clearLoopRegion(); };
-
-  //--- Tempo Slider & Label Setup ---
-  addAndMakeVisible(tempoSlider);
-  addAndMakeVisible(tempoLabel);
-
-  tempoLabel.setText("Tempo", juce::dontSendNotification);
-  tempoSlider.setRange(30.0, 300.0, 1.0);
-  tempoSlider.setValue(120.0, juce::dontSendNotification);
-  tempoSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
-  tempoSlider.onValueChange = [this]() {
-    double newTempo = tempoSlider.getValue();
-    tempo = newTempo; // Update our member variable
-    midiSchedulerAudioSource->setTempo(newTempo);
-    DBG("Tempo changed to: " + juce::String(newTempo) + " BPM");
-  };
-
-  midiSchedulerAudioSource->onPlaybackStopped = [this]() {
-    // This code executes on the message thread.
-    playButton.setEnabled(true);
-    stopButton.setEnabled(false);
-    // Optionally update any other UI state.
-  };
 
   // Set the size of the MainComponent.
   setSize(800, 600);
@@ -318,6 +327,14 @@ void MainComponent::loadMidiFile()
                             
                             DBG("Setting sequence in piano roll...");
                             safeThis->pianoRoll.setMidiSequence(safeThis->midiSequence);
+                            
+                            // Set the MIDI sequence in the scheduler first, which will extract tempo
+                            safeThis->midiSchedulerAudioSource->setMidiSequence(safeThis->midiSequence);
+                            
+                            // Update piano roll with time signature from scheduler
+                            safeThis->pianoRoll.setTimeSignature(
+                                safeThis->midiSchedulerAudioSource->getNumerator(),
+                                safeThis->midiSchedulerAudioSource->getDenominator());
                             
                             DBG("Updating UI state...");
                             safeThis->playButton.setEnabled(true);

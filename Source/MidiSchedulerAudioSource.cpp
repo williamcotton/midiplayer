@@ -20,7 +20,9 @@ void MidiSchedulerAudioSource::getNextAudioBlock(
     return;
 
   const int numSamples = bufferToFill.numSamples;
-  const double currentTempo = tempo.load();
+  const double currentTick = playbackPosition.load() * ppq;
+  const double currentTempo = getCurrentTempo(currentTick);
+  tempo.store(currentTempo);  // Update the stored tempo for UI purposes
   const double secondsPerBeat = 60.0 / currentTempo;
   const double beatsPerBlock =
       (numSamples / currentSampleRate) / secondsPerBeat;
@@ -108,7 +110,107 @@ void MidiSchedulerAudioSource::setMidiSequence (const juce::MidiMessageSequence&
     midiSequence = sequence;
     // Reset only the playback position, not the tempo:
     playbackPosition.store(0.0);
-    // Do NOT reset tempo here.
+    
+    // Extract tempo and time signature information
+    extractTempoEvents();
+    extractTimeSignature();
+}
+
+void MidiSchedulerAudioSource::extractTempoEvents()
+{
+    tempoEvents.clear();
+    bool foundTempoEvent = false;
+    double initialTempo = 120.0;  // Default tempo
+    
+    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+    {
+        auto* event = midiSequence.getEventPointer(i);
+        auto& msg = event->message;
+        
+        if (msg.isMetaEvent())
+        {
+            const uint8_t* data = msg.getRawData();
+            if (data[1] == 0x51 && data[2] == 0x03)  // Tempo meta event
+            {
+                // Extract tempo in microseconds per quarter note
+                uint32_t tempoValue = (data[3] << 16) | (data[4] << 8) | data[5];
+                double bpm = 60000000.0 / tempoValue;
+                DBG("Found tempo event at tick " + juce::String(msg.getTimeStamp()) + 
+                    ": " + juce::String(bpm) + " BPM");
+                tempoEvents.push_back({msg.getTimeStamp(), static_cast<double>(tempoValue)});
+                
+                // If this is the first tempo event, store it as our initial tempo
+                if (!foundTempoEvent) {
+                    initialTempo = bpm;
+                    foundTempoEvent = true;
+                }
+            }
+        }
+    }
+    
+    // Sort tempo events by timestamp
+    std::sort(tempoEvents.begin(), tempoEvents.end());
+    
+    // If no tempo events were found, use default tempo
+    if (!foundTempoEvent) {
+        DBG("No tempo events found, using default 120 BPM");
+        tempoEvents.push_back({0.0, 500000.0});  // 120 BPM
+        initialTempo = 120.0;
+    }
+    
+    // Always notify about the initial tempo, whether it's from the file or default
+    if (onTempoChanged) {
+        DBG("Setting initial tempo to: " + juce::String(initialTempo) + " BPM");
+        juce::MessageManager::callAsync([this, initialTempo]() {
+            if (onTempoChanged) onTempoChanged(initialTempo);
+        });
+    }
+    
+    // Store the initial tempo
+    tempo.store(initialTempo);
+}
+
+void MidiSchedulerAudioSource::extractTimeSignature()
+{
+    for (int i = 0; i < midiSequence.getNumEvents(); ++i)
+    {
+        auto* event = midiSequence.getEventPointer(i);
+        auto& msg = event->message;
+        
+        if (msg.isMetaEvent())
+        {
+            const uint8_t* data = msg.getRawData();
+            if (data[1] == 0x58 && data[2] == 0x04)  // Time signature meta event
+            {
+                timeSignatureNumerator = data[3];
+                timeSignatureDenominator = 1 << data[4];  // 2^data[4]
+                clocksPerClick = data[5];
+                thirtySecondPer24Clocks = data[6];
+                
+                DBG("Found time signature: " + juce::String(timeSignatureNumerator) + "/" + 
+                    juce::String(timeSignatureDenominator) + 
+                    " (clocks per click: " + juce::String(clocksPerClick) + 
+                    ", 32nd notes per 24 MIDI clocks: " + juce::String(thirtySecondPer24Clocks) + ")");
+                
+                // Usually we only care about the first time signature, unless implementing
+                // time signature changes
+                break;
+            }
+        }
+    }
+}
+
+double MidiSchedulerAudioSource::getCurrentTempo(double timestamp) const
+{
+    // Find the last tempo event before or at this timestamp
+    auto it = std::upper_bound(tempoEvents.begin(), tempoEvents.end(), 
+                              TempoEvent{timestamp, 0.0});
+    
+    if (it == tempoEvents.begin())
+        return 120.0;  // Default tempo if timestamp is before first tempo event
+        
+    --it;  // Move to the last event before timestamp
+    return 60000000.0 / it->tempo;  // Convert microseconds per quarter note to BPM
 }
 
 void MidiSchedulerAudioSource::startPlayback() {
@@ -120,6 +222,9 @@ void MidiSchedulerAudioSource::stopPlayback() { isPlaying = false; }
 
 void MidiSchedulerAudioSource::setTempo(double newTempo) {
   tempo.store(newTempo);
+  // Clear any MIDI tempo events and set a single tempo event at time 0
+  tempoEvents.clear();
+  tempoEvents.push_back({0.0, 60000000.0 / newTempo});  // Convert BPM to microseconds per quarter note
 }
 
 void MidiSchedulerAudioSource::setLoopRegion(double startBeat, double endBeat,

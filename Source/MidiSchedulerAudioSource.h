@@ -29,6 +29,13 @@ public:
   void setTempo(double newTempo);
   void setPPQ(int ppqValue) { ppq = ppqValue; }
 
+  // Time signature getters
+  int getNumerator() const { return timeSignatureNumerator; }
+  int getDenominator() const { return timeSignatureDenominator; }
+  
+  // Callback for tempo changes
+  std::function<void(double)> onTempoChanged;
+  
   // Loop settings (in beats). For a valid loop, endBeat must be greater than
   // startBeat. loops: the number of times to loop.
   void setLoopRegion(double startBeat, double endBeat, int loops);
@@ -43,12 +50,32 @@ private:
   // The MIDI sequence for playback.
   juce::MidiMessageSequence midiSequence;
 
+  struct TempoEvent {
+    double timestamp;  // in ticks
+    double tempo;      // in microseconds per quarter note
+    
+    bool operator<(const TempoEvent& other) const {
+      return timestamp < other.timestamp;
+    }
+  };
+  
+  std::vector<TempoEvent> tempoEvents;
+  double getCurrentTempo(double timestamp) const;
+  void extractTempoEvents();
+  void extractTimeSignature();
+
   // Global playback state.
   std::atomic<double> playbackPosition{0.0}; // in beats
   std::atomic<double> tempo{120.0};          // BPM
   double currentSampleRate = 44100.0;
   bool isPlaying = false;
   int ppq = 480;  // Pulses Per Quarter note, default 480
+  
+  // Time signature state
+  int timeSignatureNumerator = 4;
+  int timeSignatureDenominator = 4;
+  int clocksPerClick = 24;
+  int thirtySecondPer24Clocks = 8;
 
   // Looping variables.
   bool isLooping = false;
