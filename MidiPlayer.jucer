@@ -80,7 +80,8 @@
       </MODULEPATHS>
     </ANDROIDSTUDIO>
     <XCODE_IPHONE targetFolder="Builds/iOS" UISupportsDocumentBrowser="1" UIFileSharingEnabled="1"
-                  customPList="&lt;plist&gt;&#10;  &lt;dict&gt;&#10;    &lt;key&gt;UIFileSharingEnabled&lt;/key&gt;&#10;    &lt;true/&gt;&#10;    &lt;key&gt;LSSupportsOpeningDocumentsInPlace&lt;/key&gt;&#10;    &lt;true/&gt;&#10;  &lt;/dict&gt;&#10;&lt;/plist&gt;">
+                  customPList="&lt;plist&gt;&#10;  &lt;dict&gt;&#10;    &lt;key&gt;UIFileSharingEnabled&lt;/key&gt;&#10;    &lt;true/&gt;&#10;    &lt;key&gt;LSSupportsOpeningDocumentsInPlace&lt;/key&gt;&#10;    &lt;true/&gt;&#10;  &lt;/dict&gt;&#10;&lt;/plist&gt;"
+                  iosBackgroundAudio="1" iosDevelopmentTeamID="NGJBVS2S37">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" plistPreprocessorDefinitions="&lt;plist version=&quot;1.0&quot;&gt;&#10;  &lt;dict&gt;&#10;    &lt;key&gt;UIFileSharingEnabled&lt;/key&gt;&#10;    &lt;true/&gt;&#10;    &lt;key&gt;LSSupportsOpeningDocumentsInPlace&lt;/key&gt;&#10;    &lt;true/&gt;&#10;  &lt;/dict&gt;&#10;&lt;/plist&gt;"/>
         <CONFIGURATION isDebug="0" name="Release"/>

@@ -44,6 +44,8 @@
       <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIBackgroundModes</key>
-    <array/>
+    <array>
+      <string>audio</string>
+    </array>
   </dict>
 </plist>
