@@ -236,3 +236,9 @@ void MidiSchedulerAudioSource::setLoopRegion(double startBeat, double endBeat,
   isLooping = (loops > 0 && endBeat > startBeat);
   playbackPosition.store(loopStartBeat);
 }
+
+void MidiSchedulerAudioSource::setTransposition(int semitones) {
+  if (synth != nullptr) {
+    synth->setTransposition(semitones);
+  }
+}

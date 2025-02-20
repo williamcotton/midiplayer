@@ -109,6 +109,13 @@ void SynthAudioSource::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         }
       }
       
+      // Transpose note on and note off messages
+      if (msg.isNoteOn() || msg.isNoteOff()) {
+        int noteNumber = msg.getNoteNumber();
+        noteNumber += transposition; // Apply transposition
+        msg = msg.withNoteNumber(noteNumber);
+      }
+      
       channelBuffers[channel].addEvent(msg, metadata.samplePosition);
       activeChannels.set(channel);
     }

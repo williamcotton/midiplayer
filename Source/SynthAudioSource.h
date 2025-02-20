@@ -34,6 +34,9 @@ public:
   // Stop all notes on all channels
   void stopAllNotes();
 
+  // Set the transposition value
+  void setTransposition(int semitones) { transposition = semitones; }
+
 private:
   // Our SF2 synthesizer and sound.
   struct ChannelInfo {
@@ -63,6 +66,9 @@ private:
   // Helper: Given a beat value, find the first event in our MIDI sequence that
   // occurs at or after that beat.
   int findEventIndexForBeat(double beat);
+
+  // Member variable to store the transposition value
+  int transposition = 0;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthAudioSource)
 };

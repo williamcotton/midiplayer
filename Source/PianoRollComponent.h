@@ -24,6 +24,7 @@ public:
         timeSignatureNumerator = 4;
         timeSignatureDenominator = 4;
         beatsPerBar = 4.0;  // Default 4/4 time
+        transposition = 0;  // Default transposition value
     }
 
     void paint(juce::Graphics& g) override
@@ -139,6 +140,11 @@ public:
         repaint();
     }
 
+    void setTransposition(int semitones) {
+        transposition = semitones;
+        repaint();
+    }
+
 private:
     struct Note
     {
@@ -194,7 +200,7 @@ private:
             {
                 float x = keyWidth + static_cast<float>(note.startBeat * owner.pixelsPerBeat);
                 float w = static_cast<float>((note.endBeat - note.startBeat) * owner.pixelsPerBeat);
-                float y = height - (note.noteNumber + 1) * owner.pixelsPerNote;
+                float y = height - (note.noteNumber + 1 + owner.transposition) * owner.pixelsPerNote;
                 
                 g.setColour(juce::Colour::fromHSV(
                     static_cast<float>(note.noteNumber) / 128.0f, 0.5f, 0.9f, 1.0f));
@@ -208,7 +214,7 @@ private:
             
             for (int note = 0; note < 128; ++note)
             {
-                float y = height - (note + 1) * owner.pixelsPerNote;
+                float y = height - (note + 1 + owner.transposition) * owner.pixelsPerNote;
                 bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
                 
                 // Draw white keys first
@@ -224,7 +230,7 @@ private:
             // Draw black keys on top
             for (int note = 0; note < 128; ++note)
             {
-                float y = height - (note + 1) * owner.pixelsPerNote;
+                float y = height - (note + 1 + owner.transposition) * owner.pixelsPerNote;
                 bool isBlackKey = juce::MidiMessage::isMidiNoteBlack(note);
                 
                 if (isBlackKey)
@@ -269,6 +275,7 @@ private:
     int timeSignatureNumerator = 4;
     int timeSignatureDenominator = 4;
     double beatsPerBar = 4.0;  // Default 4/4 time
+    int transposition;  // Transposition value in semitones
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollComponent)
 };
