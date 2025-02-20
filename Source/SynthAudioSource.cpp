@@ -108,6 +108,15 @@ void SynthAudioSource::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
               " to program " + juce::String(programNumber));
         }
       }
+      // Handle note messages - apply transposition except for channel 10 (drums)
+      else if ((msg.isNoteOn() || msg.isNoteOff()) && channel != 9) {
+        int transposedNote = juce::jlimit(0, 127, msg.getNoteNumber() + transpositionAmount.load());
+        if (msg.isNoteOn()) {
+          msg = juce::MidiMessage::noteOn(msg.getChannel(), transposedNote, msg.getVelocity());
+        } else {
+          msg = juce::MidiMessage::noteOff(msg.getChannel(), transposedNote, msg.getVelocity());
+        }
+      }
       
       channelBuffers[channel].addEvent(msg, metadata.samplePosition);
       activeChannels.set(channel);

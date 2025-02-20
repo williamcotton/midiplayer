@@ -3,7 +3,8 @@
 
 MainComponent::MainComponent()
     : loadButton("Load MIDI File"), playButton("Play"), stopButton("Stop"),
-      setLoopButton("Set Loop"), clearLoopButton("Clear Loop"), pianoRoll(),
+      setLoopButton("Set Loop"), clearLoopButton("Clear Loop"),
+      transpositionLabel("TranspositionLabel", "Transpose"), pianoRoll(),
       tempoSlider(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight),
       tempoLabel("TempoLabel", "Tempo") {
   // Enable keyboard input and add ourselves as a key listener.
@@ -50,6 +51,26 @@ MainComponent::MainComponent()
       };
     }
   }
+
+  // Set up transposition combo box
+  addAndMakeVisible(transpositionBox);
+  addAndMakeVisible(transpositionLabel);
+  transpositionLabel.setText("Transpose", juce::dontSendNotification);
+  
+  transpositionBox.setTextWhenNothingSelected("No Transpose");
+  for (int i = -12; i <= 12; ++i) {
+    transpositionBox.addItem(juce::String(i) + " semitones", i + 13); // Make IDs 1-based
+  }
+  transpositionBox.setSelectedId(13, juce::dontSendNotification); // Select 0 (no transposition)
+  
+  transpositionBox.onChange = [this]() {
+    int transposition = transpositionBox.getSelectedId() - 13; // Convert back to -12 to +12 range
+    if (synthAudioSource != nullptr) {
+      synthAudioSource->stopAllNotes(); // Stop all currently playing notes
+      synthAudioSource->setTransposition(transposition);
+    }
+    pianoRoll.setTransposition(transposition);
+  };
 
   // Create the MidiSchedulerAudioSource, passing the synth.
   midiSchedulerAudioSource =
@@ -172,20 +193,26 @@ void MainComponent::resized()
     }
 #endif
 
+    // First row: Load, Play, Stop, Preset
     auto topControls = area.removeFromTop(buttonHeight);
     loadButton.setBounds(topControls.removeFromLeft(120).reduced(paddingX, paddingY));
     playButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
     stopButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
-    presetBox.setBounds(topControls.removeFromLeft(200).reduced(paddingX, paddingY));  // Add preset box
-    tempoLabel.setBounds(topControls.removeFromLeft(100).reduced(paddingX, paddingY));
+    presetBox.setBounds(topControls.removeFromLeft(200).reduced(paddingX, paddingY));
     
+    // Second row: Loop controls and Tempo
     auto loopControls = area.removeFromTop(buttonHeight);
     setLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(paddingX, paddingY));
     clearLoopButton.setBounds(loopControls.removeFromLeft(100).reduced(paddingX, paddingY));
+    tempoLabel.setBounds(loopControls.removeFromLeft(60).reduced(paddingX, paddingY));
+    tempoSlider.setBounds(loopControls.removeFromLeft(200).reduced(paddingX, paddingY));
     
-    auto tempoControls = loopControls.removeFromLeft(250);
-    tempoSlider.setBounds(tempoControls.reduced(paddingX, paddingY));
+    // Third row: Transposition controls
+    auto transpositionControls = area.removeFromTop(buttonHeight);
+    transpositionLabel.setBounds(transpositionControls.removeFromLeft(100).reduced(paddingX, paddingY));
+    transpositionBox.setBounds(transpositionControls.removeFromLeft(200).reduced(paddingX, paddingY));
     
+    // Remaining space for piano roll
     pianoRoll.setBounds(area.reduced(paddingX, paddingY));
 }
 

@@ -34,6 +34,9 @@ public:
   // Stop all notes on all channels
   void stopAllNotes();
 
+  // Set the transposition amount in semitones
+  void setTransposition(int semitones) { transpositionAmount = semitones; }
+
 private:
   // Our SF2 synthesizer and sound.
   struct ChannelInfo {
@@ -59,6 +62,9 @@ private:
 
   // Temporary buffer for mixing
   std::unique_ptr<juce::AudioBuffer<float>> tempBuffer;
+
+  // Transposition amount in semitones
+  std::atomic<int> transpositionAmount{0};
 
   // Helper: Given a beat value, find the first event in our MIDI sequence that
   // occurs at or after that beat.

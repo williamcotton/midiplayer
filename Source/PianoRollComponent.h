@@ -24,6 +24,7 @@ public:
         timeSignatureNumerator = 4;
         timeSignatureDenominator = 4;
         beatsPerBar = 4.0;  // Default 4/4 time
+        transposition = 0;  // No transposition by default
     }
 
     void paint(juce::Graphics& g) override
@@ -139,6 +140,14 @@ public:
         repaint();
     }
 
+    void setTransposition(int semitones)
+    {
+        transposition = semitones;
+        contentComponent.repaint();
+    }
+
+    int getTransposition() const { return transposition; }
+
 private:
     struct Note
     {
@@ -146,6 +155,13 @@ private:
         double startBeat;
         double endBeat;
         int velocity;
+
+        int getTransposedNoteNumber(int transposition) const
+        {
+            // Don't transpose if it would go out of MIDI note range (0-127)
+            int transposed = noteNumber + transposition;
+            return juce::jlimit(0, 127, transposed);
+        }
     };
 
     class ContentComponent : public juce::Component
@@ -194,10 +210,13 @@ private:
             {
                 float x = keyWidth + static_cast<float>(note.startBeat * owner.pixelsPerBeat);
                 float w = static_cast<float>((note.endBeat - note.startBeat) * owner.pixelsPerBeat);
-                float y = height - (note.noteNumber + 1) * owner.pixelsPerNote;
+                
+                // Use transposed note number for y-position
+                int transposedNote = note.getTransposedNoteNumber(owner.transposition);
+                float y = height - (transposedNote + 1) * owner.pixelsPerNote;
                 
                 g.setColour(juce::Colour::fromHSV(
-                    static_cast<float>(note.noteNumber) / 128.0f, 0.5f, 0.9f, 1.0f));
+                    static_cast<float>(transposedNote) / 128.0f, 0.5f, 0.9f, 1.0f));
                 
                 g.fillRect(x, y, w, static_cast<float>(owner.pixelsPerNote));
             }
@@ -269,6 +288,7 @@ private:
     int timeSignatureNumerator = 4;
     int timeSignatureDenominator = 4;
     double beatsPerBar = 4.0;  // Default 4/4 time
+    int transposition = 0;  // Number of semitones to transpose (can be negative)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollComponent)
 };

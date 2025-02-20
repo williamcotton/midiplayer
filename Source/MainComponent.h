@@ -71,6 +71,8 @@ private:
   juce::TextButton setLoopButton;
   juce::TextButton clearLoopButton;
   juce::ComboBox presetBox; // For preset selection
+  juce::ComboBox transpositionBox; // For note transposition
+  juce::Label transpositionLabel;
   PianoRollComponent pianoRoll;
   juce::Slider tempoSlider;
   juce::Label tempoLabel;
