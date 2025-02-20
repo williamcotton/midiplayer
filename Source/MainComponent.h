@@ -9,6 +9,11 @@ class MainComponent : public juce::Component,
                       public juce::Timer,
                       public juce::KeyListener {
 public:
+  // Transport control glyphs as UTF-8 encoded strings
+  static constexpr const char* PLAY_SYMBOL = "\xE2\x96\xB6";      // ▶
+  static constexpr const char* PAUSE_SYMBOL = "\xE2\x8F\xB8";     // ⏸
+  static constexpr const char* RETURN_TO_START_SYMBOL = "\xE2\x8F\xAE";  // ⏮
+
   MainComponent();
   ~MainComponent() override;
 
@@ -40,6 +45,9 @@ public:
   void clearLoopRegion();
 
 private:
+  // Updates playback state and related UI elements
+  void updatePlaybackState(bool playing);
+
   // File chooser
   std::unique_ptr<juce::FileChooser> fileChooser;
 
@@ -66,8 +74,8 @@ private:
 
   // GUI components
   juce::TextButton loadButton;
-  juce::TextButton playButton;
-  juce::TextButton stopButton;
+  juce::TextButton playPauseButton;  // Renamed from playButton
+  juce::TextButton returnToStartButton;  // New button
   juce::TextButton setLoopButton;
   juce::TextButton clearLoopButton;
   juce::ComboBox presetBox; // For preset selection

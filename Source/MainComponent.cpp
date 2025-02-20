@@ -2,7 +2,9 @@
 #include "SynthAudioSource.h" // Make sure this header is available in your project
 
 MainComponent::MainComponent()
-    : loadButton("Load MIDI File"), playButton("Play"), stopButton("Stop"),
+    : loadButton("Load MIDI File"), 
+      playPauseButton(juce::CharPointer_UTF8(PLAY_SYMBOL)),
+      returnToStartButton(juce::CharPointer_UTF8(RETURN_TO_START_SYMBOL)),
       setLoopButton("Set Loop"), clearLoopButton("Clear Loop"),
       transpositionLabel("TranspositionLabel", "Transpose"), pianoRoll(),
       tempoSlider(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight),
@@ -108,15 +110,13 @@ MainComponent::MainComponent()
 
   midiSchedulerAudioSource->onPlaybackStopped = [this]() {
     // This code executes on the message thread.
-    playButton.setEnabled(true);
-    stopButton.setEnabled(false);
-    // Optionally update any other UI state.
+    updatePlaybackState(false);
   };
 
   //--- GUI Setup ---
   addAndMakeVisible(loadButton);
-  addAndMakeVisible(playButton);
-  addAndMakeVisible(stopButton);
+  addAndMakeVisible(playPauseButton);
+  addAndMakeVisible(returnToStartButton);
   addAndMakeVisible(setLoopButton);
   addAndMakeVisible(clearLoopButton);
   addAndMakeVisible(presetBox);
@@ -124,15 +124,34 @@ MainComponent::MainComponent()
 
   // Set button text.
   loadButton.setButtonText("Load MIDI File");
-  playButton.setButtonText("Play");
-  stopButton.setButtonText("Stop");
+  returnToStartButton.setButtonText(juce::CharPointer_UTF8(RETURN_TO_START_SYMBOL));
   setLoopButton.setButtonText("Set Loop");
   clearLoopButton.setButtonText("Clear Loop");
 
   // Button callbacks.
   loadButton.onClick = [this]() { loadMidiFile(); };
-  playButton.onClick = [this]() { playMidiFile(); };
-  stopButton.onClick = [this]() { stopMidiFile(); };
+  
+  playPauseButton.onClick = [this]() {
+    if (midiSequence.getNumEvents() > 0) {
+      if (isPlaying) {
+        updatePlaybackState(false);
+      } else {
+        updatePlaybackState(true);
+      }
+    }
+  };
+
+  returnToStartButton.onClick = [this]() {
+    bool wasPlaying = isPlaying;
+    if (wasPlaying) {
+      updatePlaybackState(false);
+    }
+    midiSchedulerAudioSource->setPlaybackPosition(0.0);
+    if (wasPlaying) {
+      updatePlaybackState(true);
+    }
+  };
+
   setLoopButton.onClick = [this]() { setupLoopRegion(); };
   clearLoopButton.onClick = [this]() { clearLoopRegion(); };
 
@@ -193,11 +212,15 @@ void MainComponent::resized()
     }
 #endif
 
-    // First row: Load, Play, Stop, Preset
+    // First row: Load, Play/Pause, Return to Start, Preset
     auto topControls = area.removeFromTop(buttonHeight);
     loadButton.setBounds(topControls.removeFromLeft(120).reduced(paddingX, paddingY));
-    playButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
-    stopButton.setBounds(topControls.removeFromLeft(80).reduced(paddingX, paddingY));
+    
+    // Create a container for the transport controls
+    auto transportControls = topControls.removeFromLeft(100);
+    playPauseButton.setBounds(transportControls.removeFromLeft(50).reduced(paddingX, paddingY));
+    returnToStartButton.setBounds(transportControls.reduced(paddingX, paddingY));
+    
     presetBox.setBounds(topControls.removeFromLeft(200).reduced(paddingX, paddingY));
     
     // Second row: Loop controls and Tempo
@@ -371,8 +394,7 @@ void MainComponent::loadMidiFile()
                                 safeThis->midiSchedulerAudioSource->getDenominator());
                             
                             DBG("Updating UI state...");
-                            safeThis->playButton.setEnabled(true);
-                            safeThis->stopButton.setEnabled(false);
+                            safeThis->updatePlaybackState(false);
                             safeThis->currentEvent = 0;
                             safeThis->playbackPosition = 0.0;
                             safeThis->lastTime = juce::Time::getMillisecondCounterHiRes();
@@ -414,24 +436,29 @@ void MainComponent::loadMidiFile()
     DBG("loadMidiFile() setup completed");
 }
 
-void MainComponent::playMidiFile() {
-  if (midiSequence.getNumEvents() > 0) {
-    // Forward the MIDI sequence and tempo to the scheduler.
-    midiSchedulerAudioSource->setMidiSequence(midiSequence);
-    midiSchedulerAudioSource->startPlayback();
+void MainComponent::updatePlaybackState(bool playing) {
+    isPlaying = playing;
+    playPauseButton.setButtonText(juce::CharPointer_UTF8(playing ? PAUSE_SYMBOL : PLAY_SYMBOL));
+    
+    if (playing) {
+        midiSchedulerAudioSource->startPlayback();
+    } else {
+        midiSchedulerAudioSource->stopPlayback();
+    }
+}
 
-    isPlaying = true;
-    playButton.setEnabled(false);
-    stopButton.setEnabled(true);
-  }
+void MainComponent::playMidiFile() {
+    if (midiSequence.getNumEvents() > 0) {
+        // Only set the MIDI sequence if we're starting from the beginning
+        if (midiSchedulerAudioSource->getPlaybackPosition() == 0.0) {
+            midiSchedulerAudioSource->setMidiSequence(midiSequence);
+        }
+        updatePlaybackState(true);
+    }
 }
 
 void MainComponent::stopMidiFile() {
-  isPlaying = false;
-  midiSchedulerAudioSource->stopPlayback();
-  playbackPosition.store(0.0);
-  playButton.setEnabled(true);
-  stopButton.setEnabled(false);
+    updatePlaybackState(false);
 }
 
 void MainComponent::setupLoopRegion() {
@@ -487,13 +514,11 @@ bool MainComponent::keyPressed(const juce::KeyPress& key, Component* originating
     // Check if spacebar was pressed
     if (key == juce::KeyPress::spaceKey)
     {
-        // Toggle playback
-        if (isPlaying)
-            stopMidiFile();
-        else if (playButton.isEnabled()) // Only start if we have a file loaded
-            playMidiFile();
-            
-        return true; // Key was handled
+        // Simulate clicking the play/pause button
+        if (midiSequence.getNumEvents() > 0) {
+            playPauseButton.onClick();
+            return true; // Key was handled
+        }
     }
     
     return false; // Key wasn't handled

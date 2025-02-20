@@ -40,6 +40,7 @@ public:
   // startBeat. loops: the number of times to loop.
   void setLoopRegion(double startBeat, double endBeat, int loops);
   double getPlaybackPosition() const { return playbackPosition.load(); }
+  void setPlaybackPosition(double newPosition) { playbackPosition.store(newPosition); }
 
   std::function<void()> onPlaybackStopped;
 
