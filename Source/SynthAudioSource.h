@@ -46,6 +46,7 @@ private:
 
   // Single shared SF2 sound instance
   std::unique_ptr<sfzero::SF2Sound> sf2Sound;
+  
 
   // Separate synth instances per channel
   std::array<ChannelInfo, 16> channelInfos;

@@ -288,23 +288,8 @@ void MainComponent::loadMidiFile()
             
             std::unique_ptr<juce::InputStream> stream;
             
-            #if JUCE_ANDROID
-            DBG("Creating Android stream...");
             juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inAddress);
             stream = fc.getURLResult().createInputStream(options);
-            #else
-            if (result.exists()) {
-                DBG("Creating file input stream...");
-                stream = std::make_unique<juce::FileInputStream>(result);
-                if (stream != nullptr) {
-                    DBG("Stream created successfully, size: " + juce::String(stream->getTotalLength()));
-                } else {
-                    DBG("Failed to create stream!");
-                }
-            } else {
-                DBG("File does not exist: " + result.getFullPathName());
-            }
-            #endif
             
             // Check component validity again before proceeding with stream processing
             if (safeThis == nullptr)

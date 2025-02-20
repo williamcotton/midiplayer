@@ -241,5 +241,5 @@ SynthAudioSource::~SynthAudioSource() {
   }
   
   // Then clear the shared sound
-  sf2Sound = nullptr;
+  // sf2Sound = nullptr;
 }
