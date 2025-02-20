@@ -3,7 +3,6 @@
 #include "SynthAudioSource.h"
 #include <JuceHeader.h>
 
-
 // This class centralizes MIDI scheduling, global playback position, and
 // looping. It does no audio rendering on its own but uses its contained
 // SynthAudioSource to render audio for the scheduled MIDI events.
@@ -42,6 +41,9 @@ public:
   double getPlaybackPosition() const { return playbackPosition.load(); }
 
   std::function<void()> onPlaybackStopped;
+
+  // Method to set the transposition value
+  void setTransposition(int semitones);
 
 private:
   // The synth that actually renders audio.

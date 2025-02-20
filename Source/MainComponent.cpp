@@ -5,7 +5,7 @@ MainComponent::MainComponent()
     : loadButton("Load MIDI File"), playButton("Play"), stopButton("Stop"),
       setLoopButton("Set Loop"), clearLoopButton("Clear Loop"), pianoRoll(),
       tempoSlider(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight),
-      tempoLabel("TempoLabel", "Tempo") {
+      tempoLabel("TempoLabel", "Tempo"), transpositionLabel("Transposition:") {
   // Enable keyboard input and add ourselves as a key listener.
   setWantsKeyboardFocus(true);
   addKeyListener(this);
@@ -100,6 +100,8 @@ MainComponent::MainComponent()
   addAndMakeVisible(clearLoopButton);
   addAndMakeVisible(presetBox);
   addAndMakeVisible(pianoRoll);
+  addAndMakeVisible(transpositionBox);
+  addAndMakeVisible(transpositionLabel);
 
   // Set button text.
   loadButton.setButtonText("Load MIDI File");
@@ -108,12 +110,18 @@ MainComponent::MainComponent()
   setLoopButton.setButtonText("Set Loop");
   clearLoopButton.setButtonText("Clear Loop");
 
-  // Button callbacks.
-  loadButton.onClick = [this]() { loadMidiFile(); };
-  playButton.onClick = [this]() { playMidiFile(); };
-  stopButton.onClick = [this]() { stopMidiFile(); };
-  setLoopButton.onClick = [this]() { setupLoopRegion(); };
-  clearLoopButton.onClick = [this]() { clearLoopRegion(); };
+  // Populate the transposition combo box with values from -12 to +12 semitones
+  for (int i = -12; i <= 12; ++i) {
+    transpositionBox.addItem(juce::String(i), i + 13); // ComboBox items are 1-indexed
+  }
+  transpositionBox.setSelectedId(13, juce::dontSendNotification); // Default to 0 semitones
+
+  // Add an onChange callback for when the user selects a new transposition value.
+  transpositionBox.onChange = [this]() {
+    int transpositionValue = transpositionBox.getSelectedId() - 13;
+    synthAudioSource->setTransposition(transpositionValue);
+    DBG("Changed transposition to: " + juce::String(transpositionValue));
+  };
 
   // Set the size of the MainComponent.
   setSize(800, 600);
@@ -185,6 +193,10 @@ void MainComponent::resized()
     
     auto tempoControls = loopControls.removeFromLeft(250);
     tempoSlider.setBounds(tempoControls.reduced(paddingX, paddingY));
+    
+    auto transpositionControls = area.removeFromTop(buttonHeight);
+    transpositionLabel.setBounds(transpositionControls.removeFromLeft(150).reduced(paddingX, paddingY));
+    transpositionBox.setBounds(transpositionControls.removeFromLeft(100).reduced(paddingX, paddingY));
     
     pianoRoll.setBounds(area.reduced(paddingX, paddingY));
 }
