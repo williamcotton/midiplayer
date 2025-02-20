@@ -69,6 +69,7 @@ public:
                 note.noteNumber = event->message.getNoteNumber();
                 note.startBeat = event->message.getTimeStamp() / ppq;
                 note.velocity = event->message.getVelocity();
+                note.channel = event->message.getChannel() - 1;  // Store MIDI channel (0-15)
                 
                 auto noteOffEvent = event->noteOffObject;
                 if (noteOffEvent != nullptr)
@@ -85,6 +86,7 @@ public:
                 
                 notes.add(note);
                 DBG("PianoRoll: Added note - Number: " + juce::String(note.noteNumber) + 
+                    " Channel: " + juce::String(note.channel) +
                     " Start: " + juce::String(note.startBeat) + 
                     " End: " + juce::String(note.endBeat));
             }
@@ -155,6 +157,7 @@ private:
         double startBeat;
         double endBeat;
         int velocity;
+        int channel;  // Add MIDI channel information
 
         int getTransposedNoteNumber(int transposition) const
         {
@@ -215,8 +218,12 @@ private:
                 int transposedNote = note.getTransposedNoteNumber(owner.transposition);
                 float y = height - (transposedNote + 1) * owner.pixelsPerNote;
                 
-                g.setColour(juce::Colour::fromHSV(
-                    static_cast<float>(transposedNote) / 128.0f, 0.5f, 0.9f, 1.0f));
+                // Calculate hue based on both note number and channel
+                float baseHue = static_cast<float>(note.channel) / 16.0f;  // Base hue from channel (0-1)
+                float noteHue = static_cast<float>(transposedNote) / 128.0f;  // Note variation (0-1)
+                float finalHue = std::fmod(baseHue + (noteHue * 0.2f), 1.0f);  // Combine with smaller note influence
+                
+                g.setColour(juce::Colour::fromHSV(finalHue, 0.7f, 0.9f, 1.0f));
                 
                 g.fillRect(x, y, w, static_cast<float>(owner.pixelsPerNote));
             }
