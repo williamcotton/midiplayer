@@ -26,7 +26,7 @@ public:
                        int numSamples);
 
   // Get the shared SF2 sound
-  sfzero::SF2Sound *getSF2Sound() const { return sf2Sound.get(); }
+  sfzero::SF2Sound* getSF2Sound() const { return sf2Sound.get(); }
 
   // Helper to set up a channel with a specific subsound
   void setupChannel(int channel, int subsoundIndex);
@@ -45,7 +45,7 @@ private:
   };
 
   // Single shared SF2 sound instance
-  std::unique_ptr<sfzero::SF2Sound> sf2Sound;
+  juce::ReferenceCountedObjectPtr<sfzero::SF2Sound> sf2Sound;
   
 
   // Separate synth instances per channel

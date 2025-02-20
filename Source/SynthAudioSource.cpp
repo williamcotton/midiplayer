@@ -6,7 +6,7 @@ SynthAudioSource::SynthAudioSource() {
   auto tempFile = juce::File::createTempFile(".sf2");
   tempFile.replaceWithData(BinaryData::gm_sf2,
                            BinaryData::gm_sf2Size);
-  sf2Sound = std::make_unique<sfzero::SF2Sound>(tempFile);
+  sf2Sound = new sfzero::SF2Sound(tempFile);
   sf2Sound->loadRegions();
   sf2Sound->loadSamples(nullptr);
   tempFile.deleteFile();
