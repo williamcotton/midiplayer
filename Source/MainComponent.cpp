@@ -442,8 +442,10 @@ void MainComponent::updatePlaybackState(bool playing) {
     
     if (playing) {
         midiSchedulerAudioSource->startPlayback();
+        pianoRoll.startPlayback();
     } else {
         midiSchedulerAudioSource->stopPlayback();
+        pianoRoll.stopPlayback();
     }
 }
 

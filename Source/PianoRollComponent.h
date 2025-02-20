@@ -2,7 +2,8 @@
 #include <JuceHeader.h>
 
 class PianoRollComponent : public juce::Component,
-                          public juce::Timer
+                          public juce::Timer,
+                          public juce::ScrollBar::Listener
 {
 public:
     PianoRollComponent()
@@ -12,6 +13,10 @@ public:
         addAndMakeVisible(viewport);
         viewport.setViewedComponent(&contentComponent, false);
         viewport.setScrollBarsShown(true, true);
+        
+        // Add listeners for both horizontal and vertical scrollbars
+        viewport.getHorizontalScrollBar().addListener(this);
+        viewport.getVerticalScrollBar().addListener(this);
         
         pixelsPerBeat = 50;
         pixelsPerNote = 10;
@@ -25,6 +30,15 @@ public:
         timeSignatureDenominator = 4;
         beatsPerBar = 4.0;  // Default 4/4 time
         transposition = 0;  // No transposition by default
+        isPlaying = false;
+        isAutoScrolling = false;
+        isManuallyScrolling = false;
+    }
+
+    ~PianoRollComponent() override
+    {
+        viewport.getHorizontalScrollBar().removeListener(this);
+        viewport.getVerticalScrollBar().removeListener(this);
     }
 
     void paint(juce::Graphics& g) override
@@ -112,16 +126,51 @@ public:
     void setPlaybackPosition(double beatPosition)
     {
         currentBeatPosition = beatPosition;
+        
+        // Only auto-scroll if playback is active and not manually scrolling
+        if (isPlaying && !isManuallyScrolling)
+        {
+            // Calculate the x position of the playback line
+            const float keyWidth = 40.0f;
+            float playbackX = keyWidth + static_cast<float>(currentBeatPosition * pixelsPerBeat);
+            
+            // Get the current viewport position and size
+            auto viewportBounds = viewport.getViewArea();
+            float viewportLeft = static_cast<float>(viewportBounds.getX());
+            float viewportRight = static_cast<float>(viewportBounds.getRight());
+            
+            // Check if the playback line is outside the visible area
+            if (playbackX < viewportLeft || playbackX > viewportRight)
+            {
+                // Calculate new viewport position to center the playback line
+                targetScrollX = playbackX - (viewportBounds.getWidth() / 2.0f);
+                
+                // Ensure we don't scroll past the content bounds
+                targetScrollX = juce::jlimit(0.0f, 
+                                          static_cast<float>(contentComponent.getWidth() - viewportBounds.getWidth()),
+                                          targetScrollX);
+                
+                // Initialize current scroll position if needed
+                if (currentScrollX < 0)
+                    currentScrollX = static_cast<float>(viewport.getViewPositionX());
+            }
+        }
+        
         contentComponent.repaint();
     }
 
     void startPlayback()
     {
-        startTimerHz(120);
+        isPlaying = true;
+        currentScrollX = static_cast<float>(viewport.getViewPositionX());
+        targetScrollX = currentScrollX;
+        startTimerHz(60); // Increased refresh rate for smoother animation
     }
 
     void stopPlayback()
     {
+        isPlaying = false;
+        currentScrollX = -1; // Reset scroll animation state
         stopTimer();
         currentBeatPosition = 0.0;
         contentComponent.repaint();
@@ -129,8 +178,30 @@ public:
 
     void timerCallback() override
     {
-        // Just trigger a repaint to update the position line
-        contentComponent.repaint();
+        if (isManuallyScrolling)
+        {
+            isManuallyScrolling = false;
+            stopTimer();
+            startTimerHz(60); // Restart the normal animation timer
+        }
+        else
+        {
+            // Normal animation timer callback
+            if (isPlaying && currentScrollX >= 0)
+            {
+                float diff = targetScrollX - currentScrollX;
+                if (std::abs(diff) > 0.5f)
+                {
+                    currentScrollX += diff * scrollAnimationSpeed;
+                    isAutoScrolling = true;  // Set flag before viewport change
+                    viewport.setViewPosition(static_cast<int>(currentScrollX), viewport.getViewPositionY());
+                    isAutoScrolling = false;  // Reset flag after viewport change
+                }
+            }
+            
+            // Update playback line
+            contentComponent.repaint();
+        }
     }
 
     void setPPQ(int ppqValue) { ppq = ppqValue; }
@@ -149,6 +220,17 @@ public:
     }
 
     int getTransposition() const { return transposition; }
+
+    // Modify ScrollBar::Listener callback
+    void scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double newRangeStart) override
+    {
+        if (!isAutoScrolling)
+        {            
+            isManuallyScrolling = true;
+            stopTimer(); // Stop any existing timer
+            startTimer(1000); // Start 1 second timeout
+        }
+    }
 
 private:
     struct Note
@@ -296,6 +378,14 @@ private:
     int timeSignatureDenominator = 4;
     double beatsPerBar = 4.0;  // Default 4/4 time
     int transposition = 0;  // Number of semitones to transpose (can be negative)
+    bool isPlaying = false;
+
+    float targetScrollX = 0.0f;
+    float currentScrollX = 0.0f;
+    static constexpr float scrollAnimationSpeed = 0.3f; // Lower = smoother but slower
+
+    bool isAutoScrolling = false;
+    bool isManuallyScrolling = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollComponent)
 };
