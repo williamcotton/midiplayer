@@ -1,58 +1,64 @@
 # MidiPlayer
 
-<img src="https://github.com/user-attachments/assets/c1abc783-717e-4195-beb0-29d591039fe0" width="200">
+A modern, feature-rich MIDI file player built with JUCE framework. This application provides a sophisticated interface for playing and visualizing MIDI files with high-quality sound synthesis.
 
-## iOS MIDI File
+## Features
 
-```bash
-$ xcrun simctl get_app_container booted com.yourcompany.MidiPlayer data
-/Users/administrator/Library/Developer/CoreSimulator/Devices/50CEA401-E138-4CBE-96C0-F56814A1E7D4/data/Containers/Data/Application/784697CE-999C-48DE-AE5E-70E08B1F2166
-$ cd /Users/administrator/Library/Developer/CoreSimulator/Devices/50CEA401-E138-4CBE-96C0-F56814A1E7D4/data/Containers/Data/Application/784697CE-999C-48DE-AE5E-70E08B1F2166
-$ tree .
-.
-├── Documents
-│   └── Triads~Minor~4-4~i_-VII_iv_V_i_-VII_iv_V.mid
-├── Library
-│   ├── Caches
-│   │   └── com.yourcompany.MidiPlayer
-│   │       ├── com.apple.metal
-│   │       │   ├── functions.data
-│   │       │   ├── functions.list
-│   │       │   ├── libraries.data
-│   │       │   └── libraries.list
-│   │       └── com.apple.metalfe
-│   ├── Preferences
-│   ├── Saved Application State
-│   │   └── com.yourcompany.MidiPlayer.savedState
-│   │       └── KnownSceneSessions
-│   │           └── data.data
-│   └── SplashBoard
-│       └── Snapshots
-│           ├── com.yourcompany.MidiPlayer - {DEFAULT GROUP}
-│           │   ├── 153A1248-EE94-4F0C-80F4-C53E2B58EA6C@2x.ktx
-│           │   ├── 1C7B5A4F-51C4-4B7E-B9F3-410A3BC156F0@2x.ktx
-│           │   ├── 60E53EB2-CD5E-4477-A627-333E99C919CE@2x.ktx
-│           │   ├── A961EFE3-D8EC-417B-A320-BE218659A74D@2x.ktx
-│           │   └── downscaled
-│           └── sceneID:com.yourcompany.MidiPlayer-default
-│               ├── 51AFFF25-84E4-496F-992F-2EE6BC3501CA@2x.ktx
-│               ├── EA01C8A0-6220-4970-8DE1-C541312CF93F@2x.ktx
-│               └── downscaled
-│                   ├── 04DA6754-7EBB-474E-BAD5-0A68E39D1306@2x.ktx
-│                   └── C0554629-21B9-45D0-87D3-365ABBC1C2FD@2x.ktx
-├── SystemData
-└── tmp
+- **Interactive Piano Roll Display**: Visual representation of MIDI notes with color-coded channels
+- **High-Quality Sound Synthesis**: Uses General MIDI (GM) SF2 soundfonts for authentic 90s-style playback
+- **Multi-Channel Support**: Full 16-channel MIDI support with proper channel routing
+- **Real-time Controls**:
+  - Play/Pause/Return to Start
+  - Tempo adjustment
+  - Note transposition (-12 to +12 semitones)
+  - Instrument preset selection
+  - Loop region setting with customizable repeat count
 
-19 directories, 14 files
-```
+## Technical Details
 
-So copy the MIDI file into the Documents directory. This has to be done for each simulator. It will persist across app restarts.
+- Built with JUCE Framework
+- Uses SFZero module for SF2 soundfont playback
+- Default General MIDI (GM) soundfont included
+- Supports standard MIDI files (.mid, .midi)
+- Cross-platform compatibility (macOS, iOS, Android)
 
+## Controls
 
-## Android MIDI File
+- **Space Bar**: Play/Pause toggle
+- **Load MIDI File**: Opens file browser to select a MIDI file
+- **Transport Controls**: 
+  - Play/Pause (▶/⏸)
+  - Return to Start (⏮)
+- **Loop Controls**: Set and clear loop regions with customizable iteration count
+- **Tempo Slider**: Adjust playback speed (30-300 BPM)
+- **Transposition**: Shift notes up or down by up to 12 semitones
+- **Preset Selection**: Choose from available GM instruments
 
-View > Tool Windows > Devive Explorer
+## Piano Roll Features
 
-Navigate to: /storage/emulated/0/Download
+- Color-coded notes by channel and pitch
+- Auto-scrolling during playback
+- Manual scroll with automatic playback following
+- Visual loop region display
+- Piano keyboard reference on the left edge
+- Beat/bar grid with time signature support
 
-Add New File, Choose MIDI File
+## Platform Support
+
+- macOS (Native)
+- iOS (Touch-optimized interface)
+- Android
+
+## Building
+
+This project requires:
+- JUCE Framework
+- SFZero Module (included)
+- C++ development environment
+- Platform-specific SDK (Xcode for macOS/iOS, Android Studio for Android)
+
+Use the provided `.jucer` file to generate project files for your platform.
+
+## License
+
+MIT License
