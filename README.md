@@ -2,7 +2,7 @@
 
 A modern, feature-rich MIDI file player built with JUCE framework. This application provides an interface for playing and visualizing MIDI.
 
-<img src="https://github.com/user-attachments/assets/c1abc783-717e-4195-beb0-29d591039fe0](https://github.com/user-attachments/assets/d09ec69c-354a-4a23-8656-36f7198df610" width="200">
+<img src="https://github.com/user-attachments/assets/d09ec69c-354a-4a23-8656-36f7198df610](https://github.com/user-attachments/assets/d09ec69c-354a-4a23-8656-36f7198df610" width="200">
 
 ## Features
 
